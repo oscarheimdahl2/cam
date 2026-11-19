@@ -1,0 +1,86 @@
+name: Cam
+options:
+  bundleIdPrefix: com.oscarheimdahl
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    # Change this one line to the paid team's ID once enrollment completes.
+    TEAM_ID: M59HFVCZCK
+    DEVELOPMENT_TEAM: $(TEAM_ID)
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Cam:
+    type: application
+    platform: macOS
+    sources: [App, Shared]
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleName: Cam
+        LSUIElement: true
+        NSCameraUsageDescription: Cam composites stickers onto your camera feed.
+        LSMinimumSystemVersion: "14.0"
+    entitlements:
+      path: App/Cam.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.device.camera: true
+        com.apple.developer.system-extension.install: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.oscarheimdahl.cam
+        ENABLE_HARDENED_RUNTIME: true
+    dependencies:
+      - target: CamExtension
+        embed: true
+        codeSign: true
+        copy:
+          destination: plugins
+          subpath: ../Library/SystemExtensions
+  CamDev:
+    # Editor + live preview only. No virtual camera, so it signs with a free personal team.
+    type: application
+    platform: macOS
+    sources: [App, Shared]
+    info:
+      path: App/InfoDev.plist
+      properties:
+        CFBundleName: Cam Dev
+        LSUIElement: true
+        NSCameraUsageDescription: Cam composites stickers onto your camera feed.
+        LSMinimumSystemVersion: "14.0"
+    entitlements:
+      path: App/CamDev.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.device.camera: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.oscarheimdahl.cam.dev
+        PRODUCT_NAME: CamDev
+        ENABLE_HARDENED_RUNTIME: true
+  CamExtension:
+    type: system-extension
+    platform: macOS
+    sources: [Extension, Shared/SharedConstants.swift]
+    info:
+      path: Extension/Info.plist
+      properties:
+        CFBundleName: Cam Camera Extension
+        CFBundleDisplayName: Cam Camera Extension
+        CMIOExtension:
+          CMIOExtensionMachServiceName: $(TEAM_ID).com.oscarheimdahl.cam.extension
+        NSSystemExtensionUsageDescription: Provides the Cam virtual camera.
+    entitlements:
+      path: Extension/CamExtension.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [$(TEAM_ID).com.oscarheimdahl.cam]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.oscarheimdahl.cam.extension
+        ENABLE_HARDENED_RUNTIME: true
