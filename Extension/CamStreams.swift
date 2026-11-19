@@ -26,6 +26,8 @@ final class CamSourceStreamSource: NSObject, CMIOExtensionStreamSource {
     private let queue = DispatchQueue(label: "cam.source")
     private var streaming = 0
     private var lastRealFrame = DispatchTime(uptimeNanoseconds: 0)
+    private var loggedFirstForward = false
+    private var loggedPlaceholder = false
     private lazy var placeholder = makePlaceholder()
     var onConsumersChanged: ((Int) -> Void)?
 
@@ -50,9 +52,13 @@ final class CamSourceStreamSource: NSObject, CMIOExtensionStreamSource {
     }
 
     func setStreamProperties(_ streamProperties: CMIOExtensionStreamProperties) throws {}
-    func authorizedToStartStream(for client: CMIOExtensionClient) -> Bool { true }
+    func authorizedToStartStream(for client: CMIOExtensionClient) -> Bool {
+        CamLog.ext.notice("source: client asked to start the stream")
+        return true
+    }
 
     func startStream() throws {
+        CamLog.ext.notice("source: startStream (a meeting app started reading)")
         queue.sync {
             streaming += 1
             if timer == nil { startTimer() }
@@ -61,6 +67,7 @@ final class CamSourceStreamSource: NSObject, CMIOExtensionStreamSource {
     }
 
     func stopStream() throws {
+        CamLog.ext.notice("source: stopStream")
         queue.sync {
             streaming = max(0, streaming - 1)
             if streaming == 0 {
@@ -75,6 +82,10 @@ final class CamSourceStreamSource: NSObject, CMIOExtensionStreamSource {
     func forward(_ buffer: CMSampleBuffer) {
         queue.async {
             guard self.streaming > 0 else { return }
+            if !self.loggedFirstForward {
+                self.loggedFirstForward = true
+                CamLog.ext.notice("source: forwarding the first frame from the app")
+            }
             self.lastRealFrame = .now()
             let pts = CMClockGetTime(CMClockGetHostTimeClock())
             self.stream.send(buffer, discontinuity: [], hostTimeInNanoseconds: hostNanos(pts))
@@ -89,6 +100,10 @@ final class CamSourceStreamSource: NSObject, CMIOExtensionStreamSource {
             guard let self else { return }
             let stale = DispatchTime.now().uptimeNanoseconds - self.lastRealFrame.uptimeNanoseconds > 500_000_000
             guard stale, let placeholder = self.placeholder else { return }
+            if !self.loggedPlaceholder {
+                self.loggedPlaceholder = true
+                CamLog.ext.notice("source: no frames from the app, sending the placeholder card")
+            }
             let pts = CMClockGetTime(CMClockGetHostTimeClock())
             var timing = CMSampleTimingInfo(duration: frameDuration, presentationTimeStamp: pts, decodeTimeStamp: .invalid)
             var sample: CMSampleBuffer?
@@ -107,8 +122,10 @@ final class CamSourceStreamSource: NSObject, CMIOExtensionStreamSource {
 
     private func makePlaceholder() -> CVPixelBuffer? {
         var buffer: CVPixelBuffer?
+        // IOSurface-backed: frames sent to other apps have to live in shared memory.
         let attrs = [kCVPixelBufferCGImageCompatibilityKey: true,
-                     kCVPixelBufferCGBitmapContextCompatibilityKey: true] as CFDictionary
+                     kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+                     kCVPixelBufferIOSurfacePropertiesKey: [:] as [String: Any]] as CFDictionary
         CVPixelBufferCreate(kCFAllocatorDefault, Int(CamConstants.width), Int(CamConstants.height),
                             kCVPixelFormatType_32BGRA, attrs, &buffer)
         guard let buffer else { return nil }
@@ -142,6 +159,7 @@ final class CamSinkStreamSource: NSObject, CMIOExtensionStreamSource {
     private let formatDescription: CMFormatDescription
     private var client: CMIOExtensionClient?
     private var sinkStarted = false
+    private var loggedFirstConsume = false
     var forward: ((CMSampleBuffer) -> Void)?
 
     init(formatDescription: CMFormatDescription) {
@@ -173,11 +191,13 @@ final class CamSinkStreamSource: NSObject, CMIOExtensionStreamSource {
     func setStreamProperties(_ streamProperties: CMIOExtensionStreamProperties) throws {}
 
     func authorizedToStartStream(for client: CMIOExtensionClient) -> Bool {
+        CamLog.ext.notice("sink: the Cam app connected")
         self.client = client
         return true
     }
 
     func startStream() throws {
+        CamLog.ext.notice("sink: startStream (the Cam app is sending frames)")
         sinkStarted = true
         if let client { consume(from: client) }
     }
@@ -191,6 +211,10 @@ final class CamSinkStreamSource: NSObject, CMIOExtensionStreamSource {
         stream.consumeSampleBuffer(from: client) { [weak self] buffer, sequenceNumber, discontinuity, hasMore, error in
             guard let self else { return }
             if let buffer {
+                if !self.loggedFirstConsume {
+                    self.loggedFirstConsume = true
+                    CamLog.ext.notice("sink: received the first frame from the app")
+                }
                 self.forward?(buffer)
                 let now = CMClockGetTime(CMClockGetHostTimeClock())
                 self.stream.notifyScheduledOutputChanged(

@@ -11,7 +11,11 @@ settings:
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.1"
-    CURRENT_PROJECT_VERSION: "1"
+    CURRENT_PROJECT_VERSION: "1"   # overridden per build (see below): macOS only replaces an extension with a higher version
+packages:
+  Vortex:
+    url: https://github.com/twostraws/Vortex
+    exactVersion: 1.0.5   # MIT licensed particle effects, pinned so builds are reproducible
 targets:
   Cam:
     type: application
@@ -21,9 +25,12 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleName: Cam
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
         LSUIElement: true
         NSCameraUsageDescription: Cam composites stickers onto your camera feed.
         LSMinimumSystemVersion: "14.0"
+        LSApplicationCategoryType: public.app-category.video
     entitlements:
       path: App/Cam.entitlements
       properties:
@@ -35,6 +42,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.oscarheimdahl.cam
         ENABLE_HARDENED_RUNTIME: true
     dependencies:
+      - package: Vortex
       - target: CamExtension
         embed: true
         codeSign: true
@@ -50,9 +58,12 @@ targets:
       path: App/InfoDev.plist
       properties:
         CFBundleName: Cam Dev
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
         LSUIElement: true
         NSCameraUsageDescription: Cam composites stickers onto your camera feed.
         LSMinimumSystemVersion: "14.0"
+        LSApplicationCategoryType: public.app-category.video
     entitlements:
       path: App/CamDev.entitlements
       properties:
@@ -63,6 +74,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.oscarheimdahl.cam.dev
         PRODUCT_NAME: CamDev
         ENABLE_HARDENED_RUNTIME: true
+    dependencies:
+      - package: Vortex
   CamExtension:
     type: system-extension
     platform: macOS
@@ -71,7 +84,10 @@ targets:
       path: Extension/Info.plist
       properties:
         CFBundleName: Cam Camera Extension
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleDisplayName: Cam Camera Extension
+        CFBundlePackageType: SYSX   # without this macOS does not recognise the bundle as a system extension
         CMIOExtension:
           CMIOExtensionMachServiceName: $(TEAM_ID).com.oscarheimdahl.cam.extension
         NSSystemExtensionUsageDescription: Provides the Cam virtual camera.
@@ -83,4 +99,39 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.oscarheimdahl.cam.extension
+        PRODUCT_NAME: $(PRODUCT_BUNDLE_IDENTIFIER)   # system extensions must be named after their bundle identifier
         ENABLE_HARDENED_RUNTIME: true
+  CamTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests
+      - App/Model/Scene.swift
+      - App/Model/Layer.swift
+      - App/Model/LegacySticker.swift
+      - App/Model/Face.swift
+      - App/Model/ConfigStore.swift
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.oscarheimdahl.cam.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+schemes:
+  Cam:
+    build:
+      targets:
+        Cam: all
+  CamDev:
+    build:
+      targets:
+        CamDev: all
+  CamTests:
+    build:
+      targets:
+        CamTests: all
+    test:
+      targets:
+        - CamTests

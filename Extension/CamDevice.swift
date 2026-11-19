@@ -14,12 +14,14 @@ final class CamDeviceSource: NSObject, CMIOExtensionDeviceSource {
     /// so it only turns the physical camera on when somebody is looking.
     private(set) var consumers = 0 {
         didSet {
+            CamLog.ext.notice("consumers is now \(self.consumers, privacy: .public)")
             device.notifyPropertiesChanged([Self.consumersProperty: CMIOExtensionPropertyState<AnyObject>(value: String(consumers) as NSString)])
         }
     }
 
     init(localizedName: String) {
         super.init()
+        CamLog.ext.notice("extension started")
         device = CMIOExtensionDevice(localizedName: localizedName,
                                      deviceID: CamConstants.deviceUUID,
                                      legacyDeviceID: nil,

@@ -4,7 +4,7 @@ import CoreImage
 /// Captures the physical camera, composites each frame, and fans the result out
 /// to the virtual camera and/or the editor preview.
 final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
-    struct Settings { var scene: CamScene; var stickersEnabled: Bool; var partyMode = false }
+    struct Settings { var scene: CamScene; var stickersEnabled: Bool }
 
     private let session = AVCaptureSession()
     private let output = AVCaptureVideoDataOutput()
@@ -15,14 +15,15 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     private let lock = NSLock()
     private var settings = Settings(scene: CamScene(name: ""), stickersEnabled: true)
     private var sendToVirtualCamera = false
-    private var previewHandler: ((CGImage) -> Void)?
+    private var previewHandler: ((CGImage, FaceState?) -> Void)?
+    private let faceTracker = FaceTracker()
     private var lastPreview = Date.distantPast
     private var configured = false
 
     private(set) var isRunning = false
 
-    init(stickersDir: URL, link: VirtualCameraLink) {
-        compositor = Compositor(stickersDir: stickersDir)
+    init(stickersDir: URL, link: VirtualCameraLink, particleFrames: ParticleFrames) {
+        compositor = Compositor(stickersDir: stickersDir, particleFrames: particleFrames)
         self.link = link
         super.init()
     }
@@ -33,9 +34,15 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         lock.lock(); self.settings = settings; lock.unlock()
     }
 
+    /// The virtual camera disappeared (for instance its extension was replaced): drop the old frame pipe, so a new one
+    /// is opened when the device comes back.
+    func virtualCameraLost() {
+        queue.async { self.link.closeSink() }
+    }
+
     func stickersChanged() { queue.async { self.compositor.forgetCachedImages() } }
 
-    func setDemand(virtualCamera: Bool, preview: ((CGImage) -> Void)?) {
+    func setDemand(virtualCamera: Bool, preview: ((CGImage, FaceState?) -> Void)?) {
         lock.lock()
         sendToVirtualCamera = virtualCamera
         previewHandler = preview
@@ -94,17 +101,25 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         let settings = self.settings, toCamera = sendToVirtualCamera, preview = previewHandler
         lock.unlock()
 
+        // Camera timestamp, not "now": steady even when processing time varies.
+        let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
+        // Face detection only runs when something needs it: a head sticker in this scene, or the editor is open
+        // (so ticking "Follow head" can use your live face).
+        let needsFace = (settings.stickersEnabled && settings.scene.layers.contains { $0.followsHead }) || preview != nil
+        var face: FaceState?
+        if needsFace { face = faceTracker.update(frame: frame, time: time) } else { faceTracker.reset() }
+
         let image = compositor.render(frame: frame, scene: settings.scene, stickersEnabled: settings.stickersEnabled,
-                                      partyMode: settings.partyMode, time: ProcessInfo.processInfo.systemUptime)
+                                      time: time, face: face)
 
         if toCamera, link.openSink() || link.isSinkOpen, let buffer = makeOutputBuffer() {
             compositor.render(image, to: buffer)
             link.send(buffer)
         }
-        if let preview, Date().timeIntervalSince(lastPreview) > 1.0 / 20 {
+        if let preview, Date().timeIntervalSince(lastPreview) > 0.030 {
             lastPreview = Date()
             if let cg = compositor.cgImage(image, maxWidth: 960) {
-                DispatchQueue.main.async { preview(cg) }
+                DispatchQueue.main.async { preview(cg, face) }
             }
         }
     }

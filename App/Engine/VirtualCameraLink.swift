@@ -9,6 +9,8 @@ final class VirtualCameraLink {
     private var sinkID = CMIOStreamID(kCMIOStreamUnknown)
     private var queue: CMSimpleQueue?
     private(set) var isSinkOpen = false
+    private var loggedFirstSend = false
+    private var loggedFullQueue = false
 
     var deviceFound: Bool { findDevice() != nil }
 
@@ -33,11 +35,26 @@ final class VirtualCameraLink {
 
     func openSink() -> Bool {
         if isSinkOpen { return true }
-        guard let device = findDevice(), let sink = findSinkStream(of: device) else { return false }
+        guard let device = findDevice() else {
+            CamLog.app.error("sink: the Cam device was not found")
+            return false
+        }
+        guard let sink = findSinkStream(of: device) else {
+            CamLog.app.error("sink: the device has no input (sink) stream")
+            return false
+        }
         var unmanagedQueue: Unmanaged<CMSimpleQueue>?
-        guard CMIOStreamCopyBufferQueue(sink, { _, _, _ in }, nil, &unmanagedQueue) == 0,
-              let q = unmanagedQueue?.takeRetainedValue() else { return false }
-        guard CMIODeviceStartStream(device, sink) == 0 else { return false }
+        let queueStatus = CMIOStreamCopyBufferQueue(sink, { _, _, _ in }, nil, &unmanagedQueue)
+        guard queueStatus == 0, let q = unmanagedQueue?.takeRetainedValue() else {
+            CamLog.app.error("sink: could not get the buffer queue (status \(queueStatus, privacy: .public))")
+            return false
+        }
+        let startStatus = CMIODeviceStartStream(device, sink)
+        guard startStatus == 0 else {
+            CamLog.app.error("sink: could not start the stream (status \(startStatus, privacy: .public))")
+            return false
+        }
+        CamLog.app.notice("sink: open, ready to send frames")
         deviceID = device
         sinkID = sink
         queue = q
@@ -54,7 +71,11 @@ final class VirtualCameraLink {
 
     func send(_ pixelBuffer: CVPixelBuffer) {
         guard isSinkOpen, let queue else { return }
-        guard CMSimpleQueueGetCount(queue) < CMSimpleQueueGetCapacity(queue) else { return }
+        guard CMSimpleQueueGetCount(queue) < CMSimpleQueueGetCapacity(queue) else {
+            if !loggedFullQueue { loggedFullQueue = true; CamLog.app.notice("sink: queue is full, dropping frames") }
+            return
+        }
+        if !loggedFirstSend { loggedFirstSend = true; CamLog.app.notice("sink: sending the first frame") }
         var description: CMVideoFormatDescription?
         CMVideoFormatDescriptionCreateForImageBuffer(allocator: kCFAllocatorDefault,
                                                      imageBuffer: pixelBuffer,
@@ -91,13 +112,19 @@ final class VirtualCameraLink {
         var streams = [CMIOStreamID](repeating: 0, count: Int(size) / MemoryLayout<CMIOStreamID>.size)
         var used: UInt32 = 0
         guard CMIOObjectGetPropertyData(device, &address, 0, nil, size, &used, &streams) == 0 else { return nil }
-        return streams.first { stream in
+        // The direction is from the app's side: 1 is the stream the app *reads* from (the extension's output, which
+        // Photo Booth or Teams read), 0 is the stream the app *writes* into (the extension's sink). Mixing these up
+        // feeds frames into the wrong stream, and its queue just fills up.
+        var found: CMIOStreamID?
+        for stream in streams {
             var direction = Self.address(selector: CMIOObjectPropertySelector(kCMIOStreamPropertyDirection))
-            var value: UInt32 = 0
+            var value: UInt32 = 99
             var got: UInt32 = 0
-            guard CMIOObjectGetPropertyData(stream, &direction, 0, nil, UInt32(MemoryLayout<UInt32>.size), &got, &value) == 0 else { return false }
-            return value == 1   // 0 = output (source), 1 = input (sink)
+            let status = CMIOObjectGetPropertyData(stream, &direction, 0, nil, UInt32(MemoryLayout<UInt32>.size), &got, &value)
+            CamLog.app.notice("stream \(stream, privacy: .public): direction \(value, privacy: .public) (status \(status, privacy: .public))")
+            if status == 0, value == 0, found == nil { found = stream }
         }
+        return found
     }
 
     private func stringProperty(_ object: CMIOObjectID, _ selector: CMIOObjectPropertySelector) -> String? {

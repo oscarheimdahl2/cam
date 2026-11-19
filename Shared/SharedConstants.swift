@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 enum CamConstants {
     static let deviceName = "Cam"
@@ -11,4 +12,11 @@ enum CamConstants {
     /// Custom device property the extension updates with the number of active consumers (e.g. Teams).
     static let consumersProperty = "4cc_cons_glob_0000"
     static let extensionBundleID = "com.oscarheimdahl.cam.extension"
+}
+
+/// Logging for the virtual camera, readable with:
+/// `log show --last 5m --info --predicate 'subsystem == "com.oscarheimdahl.cam"'`
+enum CamLog {
+    static let ext = Logger(subsystem: "com.oscarheimdahl.cam", category: "extension")
+    static let app = Logger(subsystem: "com.oscarheimdahl.cam", category: "app")
 }
