@@ -10,7 +10,7 @@ struct Sticker: Codable, Identifiable, Equatable {
     var width = 0.2
     var rotation = 0.0
     var aspect = 1.0          // image width / height
-    var styled = false        // "sticker look": white border, rounded corners, drop shadow
+    var styled = true         // "sticker look": white border, rounded corners, drop shadow
 }
 
 extension Sticker {
@@ -34,28 +34,30 @@ struct CamScene: Codable, Identifiable, Equatable {
     var name: String
     var blurEnabled = false
     var blurRadius = 20.0
+    var partyMode = false
     var stickers: [Sticker] = []
+}
+
+extension CamScene {
+    // Custom decoding so scenes saved before `partyMode` existed still load.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        blurEnabled = try c.decodeIfPresent(Bool.self, forKey: .blurEnabled) ?? false
+        blurRadius = try c.decodeIfPresent(Double.self, forKey: .blurRadius) ?? 20
+        partyMode = try c.decodeIfPresent(Bool.self, forKey: .partyMode) ?? false
+        stickers = try c.decodeIfPresent([Sticker].self, forKey: .stickers) ?? []
+    }
 }
 
 struct CamConfig: Codable, Equatable {
     var scenes: [CamScene] = [CamScene(name: "Clean")]
     var activeSceneID: UUID?
     var stickersEnabled = true
-    var partyMode = false
 
     var activeIndex: Int {
         scenes.firstIndex { $0.id == activeSceneID } ?? 0
     }
     var activeScene: CamScene { scenes[activeIndex] }
-}
-
-extension CamConfig {
-    // Custom decoding so configs saved before `partyMode` existed still load.
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        scenes = try c.decodeIfPresent([CamScene].self, forKey: .scenes) ?? [CamScene(name: "Clean")]
-        activeSceneID = try c.decodeIfPresent(UUID.self, forKey: .activeSceneID)
-        stickersEnabled = try c.decodeIfPresent(Bool.self, forKey: .stickersEnabled) ?? true
-        partyMode = try c.decodeIfPresent(Bool.self, forKey: .partyMode) ?? false
-    }
 }

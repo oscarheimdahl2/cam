@@ -34,7 +34,7 @@ final class AppModel: ObservableObject {
         }
         if loaded.activeSceneID == nil { loaded.activeSceneID = loaded.scenes[0].id }
         config = loaded
-        pipeline.update(.init(scene: loaded.activeScene, stickersEnabled: loaded.stickersEnabled, partyMode: loaded.partyMode))
+        pipeline.update(.init(scene: loaded.activeScene, stickersEnabled: loaded.stickersEnabled, partyMode: loaded.activeScene.partyMode))
 
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.poll() }
@@ -75,7 +75,7 @@ final class AppModel: ObservableObject {
     // MARK: Persistence
 
     private func configChanged() {
-        pipeline.update(.init(scene: config.activeScene, stickersEnabled: config.stickersEnabled, partyMode: config.partyMode))
+        pipeline.update(.init(scene: config.activeScene, stickersEnabled: config.stickersEnabled, partyMode: config.activeScene.partyMode))
         if let data = try? JSONEncoder().encode(config) {
             try? data.write(to: folder.appendingPathComponent("config.json"), options: .atomic)
         }
@@ -116,6 +116,7 @@ final class AppModel: ObservableObject {
     }
 
     func toggleBlur() { mutateScene { $0.blurEnabled.toggle() } }
+    func togglePartyMode() { mutateScene { $0.partyMode.toggle() } }
 
     // MARK: Stickers
 

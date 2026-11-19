@@ -25,7 +25,7 @@ struct MenuContent: View {
         Text(model.statusLine)
         Divider()
         Toggle("Stickers", isOn: Binding(get: { model.config.stickersEnabled }, set: { model.config.stickersEnabled = $0 }))
-        Toggle("Party mode", isOn: Binding(get: { model.config.partyMode }, set: { model.config.partyMode = $0 }))
+        Toggle("Party mode", isOn: Binding(get: { model.scene.partyMode }, set: { _ in model.togglePartyMode() }))
         Toggle("Blur background", isOn: Binding(get: { model.scene.blurEnabled }, set: { _ in model.toggleBlur() }))
         Divider()
         ForEach(model.config.scenes) { scene in

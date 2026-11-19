@@ -218,8 +218,8 @@ struct Inspector: View {
                 .disabled(!model.scene.blurEnabled)
             Toggle("Stickers visible", isOn: Binding(get: { model.config.stickersEnabled },
                                                     set: { model.config.stickersEnabled = $0 }))
-            Toggle("Party mode", isOn: Binding(get: { model.config.partyMode }, set: { model.config.partyMode = $0 }))
-            Text("Spinning, rainbow stickers and golden lights. Turn it off to edit placement.")
+            Toggle("Party mode", isOn: Binding(get: { model.scene.partyMode }, set: { _ in model.togglePartyMode() }))
+            Text("Part of this scene: spinning, rainbow stickers and golden lights. Turn it off to edit placement.")
                 .font(.caption).foregroundStyle(.secondary)
             Divider()
             HStack {

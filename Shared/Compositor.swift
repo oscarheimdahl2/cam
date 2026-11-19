@@ -130,7 +130,7 @@ final class Compositor {
         }
         if sticker.styled { local = Self.applyStickerLook(to: local, width: width, height: height) }
         let transform = CGAffineTransform(translationX: -width / 2, y: -height / 2)
-            .concatenating(CGAffineTransform(rotationAngle: -(sticker.rotation + (partyMode ? time * 0.25 : 0))))
+            .concatenating(CGAffineTransform(rotationAngle: -(sticker.rotation + (partyMode ? time * 0.25 * Self.spinDirection(of: sticker) : 0))))
             .concatenating(CGAffineTransform(translationX: sticker.x * size.width, y: (1 - sticker.y) * size.height))
         return local.transformed(by: transform)
     }
@@ -189,6 +189,12 @@ final class Compositor {
     }
 
     // MARK: - Party mode
+
+    /// Each sticker spins clockwise or counter-clockwise, picked at random but stable: it comes from the
+    /// sticker's id, so it doesn't flip from frame to frame.
+    private static func spinDirection(of sticker: Sticker) -> Double {
+        sticker.id.uuid.0 % 2 == 0 ? 1 : -1
+    }
 
     /// Fully saturated colour for a hue in 0...1 (HSV with s = v = 1).
     private static func rainbowColor(hue: Double, alpha: CGFloat) -> CIColor {
