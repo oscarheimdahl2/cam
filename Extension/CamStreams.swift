@@ -1,7 +1,5 @@
 import CoreMediaIO
 import CoreVideo
-import CoreGraphics
-import CoreText
 import Foundation
 
 private func hostNanos(_ time: CMTime) -> UInt64 {
@@ -28,7 +26,7 @@ final class CamSourceStreamSource: NSObject, CMIOExtensionStreamSource {
     private var lastRealFrame = DispatchTime(uptimeNanoseconds: 0)
     private var loggedFirstForward = false
     private var loggedPlaceholder = false
-    private lazy var placeholder = makePlaceholder()
+    private lazy var placeholder = PlaceholderCard.makePixelBuffer()
     var onConsumersChanged: ((Int) -> Void)?
 
     init(formatDescription: CMFormatDescription) {
@@ -118,37 +116,6 @@ final class CamSourceStreamSource: NSObject, CMIOExtensionStreamSource {
         }
         self.timer = timer
         timer.resume()
-    }
-
-    private func makePlaceholder() -> CVPixelBuffer? {
-        var buffer: CVPixelBuffer?
-        // IOSurface-backed: frames sent to other apps have to live in shared memory.
-        let attrs = [kCVPixelBufferCGImageCompatibilityKey: true,
-                     kCVPixelBufferCGBitmapContextCompatibilityKey: true,
-                     kCVPixelBufferIOSurfacePropertiesKey: [:] as [String: Any]] as CFDictionary
-        CVPixelBufferCreate(kCFAllocatorDefault, Int(CamConstants.width), Int(CamConstants.height),
-                            kCVPixelFormatType_32BGRA, attrs, &buffer)
-        guard let buffer else { return nil }
-        CVPixelBufferLockBaseAddress(buffer, [])
-        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
-        guard let context = CGContext(data: CVPixelBufferGetBaseAddress(buffer),
-                                      width: Int(CamConstants.width), height: Int(CamConstants.height),
-                                      bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
-                                      space: CGColorSpaceCreateDeviceRGB(),
-                                      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
-        else { return nil }
-        context.setFillColor(CGColor(gray: 0.1, alpha: 1))
-        context.fill(CGRect(x: 0, y: 0, width: Int(CamConstants.width), height: Int(CamConstants.height)))
-        let text = "Cam isn't running. Open the Cam app." as CFString
-        let font = CTFontCreateWithName("Helvetica" as CFString, 56, nil)
-        let attributes = [kCTFontAttributeName: font,
-                          kCTForegroundColorAttributeName: CGColor(gray: 0.85, alpha: 1)] as CFDictionary
-        let line = CTLineCreateWithAttributedString(CFAttributedStringCreate(nil, text, attributes))
-        let bounds = CTLineGetBoundsWithOptions(line, [])
-        context.textPosition = CGPoint(x: (CGFloat(CamConstants.width) - bounds.width) / 2,
-                                       y: CGFloat(CamConstants.height) / 2)
-        CTLineDraw(line, context)
-        return buffer
     }
 }
 

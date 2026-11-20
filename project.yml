@@ -131,6 +131,7 @@ targets:
       - App/Model/LegacySticker.swift
       - App/Model/Face.swift
       - App/Model/ConfigStore.swift
+      - Extension/PlaceholderCard.swift
       - Shared
     settings:
       base:
