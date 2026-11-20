@@ -50,6 +50,7 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$OUT/Expo
   -exportPath "$EXPORT" -allowProvisioningUpdates -quiet
 APP="$EXPORT/Cam.app"
 codesign --verify --deep --strict "$APP"
+"$(dirname "$0")/check-no-user-data.sh" "$APP"   # a fresh install must start empty
 
 if [[ $SKIP_NOTARIZE -eq 0 ]]; then
   echo "== 4/6 Notarize the app (Apple scans it; usually a few minutes)"
