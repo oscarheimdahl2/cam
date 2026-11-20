@@ -49,6 +49,25 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
           rm "$RUNNER_TEMP/cert.p12"
 
+      - name: Install the Developer ID provisioning profiles
+        env:
+          PROFILE_APP: ${{ secrets.PROFILE_APP }}
+          PROFILE_EXT: ${{ secrets.PROFILE_EXT }}
+        run: |
+          DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$DIR"
+          install_profile() {   # $1 = base64 profile, $2 = env var to set to the profile's name
+            echo "$1" | base64 --decode > "$RUNNER_TEMP/p.provisionprofile"
+            security cms -D -i "$RUNNER_TEMP/p.provisionprofile" > "$RUNNER_TEMP/p.plist"
+            UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$RUNNER_TEMP/p.plist")
+            NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" "$RUNNER_TEMP/p.plist")
+            cp "$RUNNER_TEMP/p.provisionprofile" "$DIR/$UUID.provisionprofile"
+            echo "$2=$NAME" >> "$GITHUB_ENV"
+            echo "Installed profile: $NAME"
+          }
+          install_profile "$PROFILE_APP" APP_PROFILE_NAME
+          install_profile "$PROFILE_EXT" EXT_PROFILE_NAME
+
       - name: Write the App Store Connect API key
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}

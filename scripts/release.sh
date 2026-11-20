@@ -5,6 +5,9 @@
 #   scripts/release.sh --skip-notarize build, sign and package only (to test the packaging; Gatekeeper will still warn)
 #   BUILD_NUMBER=1795168971 scripts/release.sh   pin the build number (the extension version) instead of using the clock
 #
+# CI signs manually with two Developer ID provisioning profiles (the runner is not a registered development device):
+#   APP_PROFILE_NAME / EXT_PROFILE_NAME = the profiles' names, already installed on the machine.
+#
 # In CI (.github/workflows/release.yml) the keychain profile is replaced by an App Store Connect API key:
 #   ASC_KEY_PATH=<AuthKey.p8> ASC_KEY_ID=<id> ASC_ISSUER_ID=<issuer> scripts/release.sh
 #
@@ -27,6 +30,9 @@ else
   XCODE_AUTH=()
 fi
 
+MANUAL_SIGNING=0
+[[ -n "${APP_PROFILE_NAME:-}" && -n "${EXT_PROFILE_NAME:-}" ]] && MANUAL_SIGNING=1
+
 TEAM_ID=$(sed -n 's/^ *TEAM_ID: *\([A-Z0-9]*\).*/\1/p' project.yml | head -1)
 VERSION=$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9.]*\)"\{0,1\}.*/\1/p' project.yml | head -1)
 BUILD=${BUILD_NUMBER:-$(date +%s)}   # a new, higher number every time (macOS only replaces an installed extension with a higher one); pin it with BUILD_NUMBER=… to rebuild without forcing an extension update
@@ -45,22 +51,40 @@ echo "== 1/6 Generate the project"
 xcodegen generate >/dev/null
 
 echo "== 2/6 Archive (Release)"
+if [[ $MANUAL_SIGNING -eq 1 ]]; then
+  ARCHIVE_SIGNING=(CAM_SIGN_STYLE=Manual "APP_PROFILE=$APP_PROFILE_NAME" "EXT_PROFILE=$EXT_PROFILE_NAME"
+                   "CODE_SIGN_IDENTITY=Developer ID Application")
+else
+  ARCHIVE_SIGNING=(-allowProvisioningUpdates -allowProvisioningDeviceRegistration ${XCODE_AUTH[@]+"${XCODE_AUTH[@]}"})
+fi
 xcodebuild archive -project Cam.xcodeproj -scheme Cam -configuration Release \
-  -archivePath "$ARCHIVE" -allowProvisioningUpdates -allowProvisioningDeviceRegistration ${XCODE_AUTH[@]+"${XCODE_AUTH[@]}"} \
+  -archivePath "$ARCHIVE" "${ARCHIVE_SIGNING[@]}" \
   CURRENT_PROJECT_VERSION="$BUILD" -quiet
 
 echo "== 3/6 Export signed with Developer ID"
+if [[ $MANUAL_SIGNING -eq 1 ]]; then
+  SIGNING_KEYS="<key>signingStyle</key><string>manual</string>
+  <key>signingCertificate</key><string>Developer ID Application</string>
+  <key>provisioningProfiles</key><dict>
+    <key>com.oscarheimdahl.cam</key><string>$APP_PROFILE_NAME</string>
+    <key>com.oscarheimdahl.cam.extension</key><string>$EXT_PROFILE_NAME</string>
+  </dict>"
+  EXPORT_AUTH=()
+else
+  SIGNING_KEYS="<key>signingStyle</key><string>automatic</string>"
+  EXPORT_AUTH=(-allowProvisioningUpdates ${XCODE_AUTH[@]+"${XCODE_AUTH[@]}"})
+fi
 cat > "$OUT/ExportOptions.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>method</key><string>developer-id</string>
   <key>teamID</key><string>$TEAM_ID</string>
-  <key>signingStyle</key><string>automatic</string>
+  $SIGNING_KEYS
 </dict></plist>
 PLIST
 xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$OUT/ExportOptions.plist" \
-  -exportPath "$EXPORT" -allowProvisioningUpdates ${XCODE_AUTH[@]+"${XCODE_AUTH[@]}"} -quiet
+  -exportPath "$EXPORT" ${EXPORT_AUTH[@]+"${EXPORT_AUTH[@]}"} -quiet
 APP="$EXPORT/Cam.app"
 codesign --verify --deep --strict "$APP"
 "$(dirname "$0")/check-no-user-data.sh" "$APP"   # a fresh install must start empty
