@@ -168,7 +168,7 @@ private struct SelectedLayerSections: View {
                 EmptyView()
             }
             if !layer.isEffect {
-                Toggle("Sticker look", isOn: model.layerBinding(layer.id, \.styled, fallback: false))
+                Toggle("Border", isOn: model.layerBinding(layer.id, \.styled, fallback: false))
                     .help("White border, rounded corners and a soft shadow")
             }
             if layer.isSticker {
