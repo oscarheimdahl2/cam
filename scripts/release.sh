@@ -53,7 +53,7 @@ xcodegen generate >/dev/null
 echo "== 2/6 Archive (Release)"
 if [[ $MANUAL_SIGNING -eq 1 ]]; then
   ARCHIVE_SIGNING=(CAM_SIGN_STYLE=Manual "APP_PROFILE=$APP_PROFILE_NAME" "EXT_PROFILE=$EXT_PROFILE_NAME"
-                   "CODE_SIGN_IDENTITY=Developer ID Application")
+                   "CAM_SIGN_IDENTITY=Developer ID Application")
 else
   ARCHIVE_SIGNING=(-allowProvisioningUpdates -allowProvisioningDeviceRegistration ${XCODE_AUTH[@]+"${XCODE_AUTH[@]}"})
 fi
