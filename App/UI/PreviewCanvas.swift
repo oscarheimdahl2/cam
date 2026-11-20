@@ -1,12 +1,14 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The live preview with the sticker handles on top. Mirrored like a mirror; the output sent to Teams is not.
+/// The live preview with the layer handles on top. It can be shown mirrored (like a mirror) or as other people see it;
+/// the picture sent to Teams is never mirrored.
 struct PreviewCanvas: View {
     @ObservedObject var model: AppModel
     /// Observed separately so only the canvas redraws for each camera frame.
     @ObservedObject var preview: PreviewState
     @State private var dropTargeted = false
+    @AppStorage("mirrorPreview") private var mirrorPreview = false
     private let aspect = CGFloat(CamConstants.width) / CGFloat(CamConstants.height)
 
     /// Room kept around the video for the handles of layers dragged to the edge (the rotate handle sits 28 pt
@@ -24,7 +26,7 @@ struct PreviewCanvas: View {
                     if let image = preview.image {
                         Image(decorative: image, scale: 1)
                             .resizable()
-                            .scaleEffect(x: -1, y: 1)
+                            .scaleEffect(x: mirrorPreview ? -1 : 1, y: 1)
                     } else {
                         VStack(spacing: 8) {
                             ProgressView()
@@ -38,7 +40,7 @@ struct PreviewCanvas: View {
                 // The handles are NOT clipped, so they stay usable when a layer sits on the edge of the video.
                 ZStack {
                     ForEach(model.scene.layers) { layer in
-                        LayerHandle(model: model, layer: layer, face: preview.face, canvas: size)
+                        LayerHandle(model: model, layer: layer, face: preview.face, canvas: size, mirrored: mirrorPreview)
                     }
                 }
                 .frame(width: size.width, height: size.height)

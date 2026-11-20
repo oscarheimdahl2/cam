@@ -7,6 +7,8 @@ struct LayerHandle: View {
     let layer: Layer
     let face: FaceState?
     let canvas: CGSize
+    /// Whether the preview is flipped like a mirror. Everything below is in on-screen terms, so it has to know.
+    let mirrored: Bool
     @State private var dragStart: (placement: Placement, point: CGPoint)?
 
     /// However far a layer is dragged, at least this much of it (on screen, in points) stays inside the video, so it
@@ -20,8 +22,8 @@ struct LayerHandle: View {
         if let place = layer.placement(face: face) {
             let boxWidth = CGFloat(place.width) * canvas.width
             let boxHeight = boxWidth / CGFloat(layer.aspect)
-            // Centre in canvas space (x is mirrored on screen).
-            let center = CGPoint(x: (1 - place.x) * canvas.width, y: place.y * canvas.height)
+            // Centre in canvas space (x runs the other way when the preview is mirrored).
+            let center = CGPoint(x: (mirrored ? 1 - place.x : place.x) * canvas.width, y: place.y * canvas.height)
             ZStack {
                 Rectangle()
                     .fill(Color.white.opacity(0.001))
@@ -38,7 +40,7 @@ struct LayerHandle: View {
                 }
             }
             .frame(width: boxWidth, height: boxHeight)
-            .rotationEffect(.radians(-place.rotation))
+            .rotationEffect(.radians(mirrored ? -place.rotation : place.rotation))   // a mirror turns clockwise into counter-clockwise
             .position(center)
             // An effect usually covers the whole frame: only let it catch clicks while it is selected,
             // so it doesn't block the layers underneath. (Select it from the list.)
@@ -63,7 +65,7 @@ struct LayerHandle: View {
                 var p = start.placement
                 let dx = Double((value.location.x - start.point.x) / canvas.width)
                 let dy = Double((value.location.y - start.point.y) / canvas.height)
-                p.x = start.placement.x - dx   // canvas is mirrored
+                p.x = start.placement.x + (mirrored ? -dx : dx)
                 p.y = start.placement.y + dy
                 // The centre may leave the video, but not so far that the layer can't be grabbed again.
                 let minVisiblePixels = Self.minVisiblePoints * Double(CamConstants.width) / Double(max(canvas.width, 1))
@@ -86,10 +88,11 @@ struct LayerHandle: View {
     private func rotateGesture(_ place: Placement, center: CGPoint) -> some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .named("canvas"))
             .onChanged { value in
-                // Clockwise angle from "up" as seen on the (mirrored) preview; stored rotation is the opposite.
+                // Clockwise angle from "up" as seen on screen. Stored rotation is clockwise on the unflipped output,
+                // so it is the opposite when the preview is mirrored.
                 let shown = atan2(value.location.x - center.x, -(value.location.y - center.y))
                 var p = place
-                p.rotation = -Double(shown)
+                p.rotation = mirrored ? -Double(shown) : Double(shown)
                 model.setPlacement(layer.id, p)
             }
     }

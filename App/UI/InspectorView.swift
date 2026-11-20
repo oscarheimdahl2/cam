@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// The inspector, top to bottom: the scene's background, the layers in a list (a real `List`, so rows reorder by
-/// dragging with the system's own insertion line), and the options of the selected layer. The divider between the
-/// list and the options can be dragged.
+/// The inspector: the layers in a list (a real `List`, so rows reorder by dragging with the system's own insertion
+/// line) above the options of the selected layer. The divider between them can be dragged.
 struct InspectorView: View {
     @ObservedObject var model: AppModel
 
@@ -11,41 +10,22 @@ struct InspectorView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Scene-wide settings come first, so they don't read as part of the selected layer further down.
+        VSplitView {
+            LayersPanel(model: model)
+                .frame(minHeight: 170, idealHeight: 260)
+
             Form {
-                Section("Background") {
-                    Toggle("Blur", isOn: model.sceneBinding(\.blurEnabled))
-                    if model.scene.blurEnabled {
-                        LabeledContent("Strength") {
-                            Slider(value: model.sceneBinding(\.blurRadius), in: 5...60)
-                        }
+                if let layer = selectedLayer {
+                    SelectedLayerSections(model: model, layer: layer)
+                } else {
+                    Section {
+                        Text("Select a layer to change its options.")
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
             .formStyle(.grouped)
-            .scrollDisabled(true)
-            .fixedSize(horizontal: false, vertical: true)
-
-            Divider()
-
-            VSplitView {
-                LayersPanel(model: model)
-                    .frame(minHeight: 170, idealHeight: 260)
-
-                Form {
-                    if let layer = selectedLayer {
-                        SelectedLayerSections(model: model, layer: layer)
-                    } else {
-                        Section {
-                            Text("Select a layer to change its options.")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .formStyle(.grouped)
-                .frame(minHeight: 150)
-            }
+            .frame(minHeight: 150)
         }
     }
 }

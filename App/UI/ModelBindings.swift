@@ -3,11 +3,6 @@ import SwiftUI
 /// Bindings the views use to read and write the model. Each one sets the value it is given (never "toggles"),
 /// so a binding is always safe to call twice.
 extension AppModel {
-    func sceneBinding<Value>(_ keyPath: WritableKeyPath<CamScene, Value>) -> Binding<Value> {
-        Binding(get: { self.scene[keyPath: keyPath] },
-                set: { value in self.mutateScene { $0[keyPath: keyPath] = value } })
-    }
-
     var stickersEnabledBinding: Binding<Bool> {
         Binding(get: { self.config.stickersEnabled }, set: { self.config.stickersEnabled = $0 })
     }

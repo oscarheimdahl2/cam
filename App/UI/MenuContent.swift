@@ -9,7 +9,6 @@ struct MenuContent: View {
         Text("Camera: \(model.statusLine)")
         Divider()
         Toggle("Stickers", isOn: model.stickersEnabledBinding)
-        Toggle("Blur background", isOn: model.sceneBinding(\.blurEnabled))
         Divider()
         Picker("Scene", selection: model.activeSceneBinding) {
             ForEach(model.config.scenes) { Text($0.name).tag($0.id) }
@@ -21,9 +20,22 @@ struct MenuContent: View {
             openWindow(id: "editor")
         }
         Button("Install / Update Virtual Camera") { model.installer.install() }
+        Button("Uninstall Virtual Camera…") { confirmUninstall() }
         Toggle("Launch at Login", isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
         Divider()
+        Button("About Cam") { AboutCredits.show() }
         Button("Quit Cam") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
+    }
+
+    private func confirmUninstall() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Uninstall the Cam virtual camera?"
+        alert.informativeText = "Cam will disappear from the camera list in Teams, Zoom and other apps. Your scenes and stickers are kept, and you can install it again at any time."
+        alert.addButton(withTitle: "Uninstall")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.first?.hasDestructiveAction = true
+        if alert.runModal() == .alertFirstButtonReturn { model.installer.uninstall() }
     }
 }

@@ -5,7 +5,7 @@ struct CamApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {
-        MenuBarExtra("Cam", systemImage: "camera.filters") {
+        MenuBarExtra("Cam", image: "MenuIcon") {   // a template image: macOS tints it for light and dark menu bars
             MenuContent(model: model)
         }
         .menuBarExtraStyle(.menu)

@@ -18,19 +18,17 @@ extension RGBAColor {
     }
 }
 
-/// A saved scene: whole-frame settings (blur) and an ordered list of layers.
+/// A saved scene: a name and an ordered list of layers.
 struct CamScene: Codable, Identifiable, Equatable {
     var id = UUID()
     var name: String
-    var blurEnabled = false
-    var blurRadius = 20.0
     /// Back (first) to front (last).
     var layers: [Layer] = []
 }
 
 extension CamScene {
     private enum CodingKeys: String, CodingKey {
-        case id, name, blurEnabled, blurRadius, layers
+        case id, name, layers
         // Read-only, for files saved by older versions:
         case stickers, partyMode
     }
@@ -40,8 +38,6 @@ extension CamScene {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         name = try c.decode(String.self, forKey: .name)
-        blurEnabled = try c.decodeIfPresent(Bool.self, forKey: .blurEnabled) ?? false
-        blurRadius = try c.decodeIfPresent(Double.self, forKey: .blurRadius) ?? 20
         if let saved = try c.decodeIfPresent([Layer].self, forKey: .layers) {
             layers = saved
         } else {
@@ -58,8 +54,6 @@ extension CamScene {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
         try c.encode(name, forKey: .name)
-        try c.encode(blurEnabled, forKey: .blurEnabled)
-        try c.encode(blurRadius, forKey: .blurRadius)
         try c.encode(layers, forKey: .layers)
     }
 }

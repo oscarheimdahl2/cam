@@ -29,10 +29,19 @@ final class LegacyDecodingTests: XCTestCase {
         XCTAssertFalse(head.styled)   // old files without the flag meant "no sticker look"
     }
 
+    func testBlurSettingsFromOlderFilesAreIgnoredAndNotWrittenBack() throws {
+        let json = #"{"id":"7B1E2C1A-5D0B-4C58-9A57-3E9B1E0C6A07","name":"Blurry","blurEnabled":true,"blurRadius":33,"layers":[]}"#
+        let scene = try JSONDecoder().decode(CamScene.self, from: Data(json.utf8))
+        XCTAssertEqual(scene.name, "Blurry")   // the scene itself loads fine
+        let saved = String(decoding: try JSONEncoder().encode(scene), as: UTF8.self)
+        XCTAssertFalse(saved.contains("blurEnabled"))
+        XCTAssertFalse(saved.contains("blurRadius"))
+    }
+
     func testSceneSavedBeforeEffectsDecodes() throws {
         let json = #"{"id":"7B1E2C1A-5D0B-4C58-9A57-3E9B1E0C6A02","name":"Old","blurEnabled":true,"blurRadius":20,"stickers":[]}"#
         let scene = try JSONDecoder().decode(CamScene.self, from: Data(json.utf8))
-        XCTAssertTrue(scene.blurEnabled)
+        XCTAssertEqual(scene.name, "Old")
     }
 
     func testASceneThatHadPartyModeOnTurnsItOnForItsStickers() throws {
@@ -130,16 +139,26 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertEqual(config.activeSceneID, config.scenes[0].id)
     }
 
+    func testAFreshInstallStartsEmpty() throws {
+        // A new user must never see anyone's scenes or stickers: one starter scene, no layers, no sticker files.
+        let store = ConfigStore(folder: folder)
+        let config = store.load()
+        XCTAssertEqual(config.scenes.count, 1)
+        XCTAssertTrue(config.scenes.flatMap(\.layers).isEmpty)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: store.stickersDirectory.path).count, 0)
+        XCTAssertTrue(CamConfig().scenes.flatMap(\.layers).isEmpty, "the built-in default must have no layers")
+    }
+
     func testFlushWritesTheLatestConfigAndLoadReadsItBack() {
         let store = ConfigStore(folder: folder, saveDelay: .seconds(60))
         var config = store.load()
         config.scenes[0].name = "Renamed"
-        config.scenes[0].blurEnabled = true
+        config.scenes[0].layers.append(.effect(.snow))
         store.save(config)
         store.flush()
         let loaded = ConfigStore(folder: folder).load()
         XCTAssertEqual(loaded.scenes[0].name, "Renamed")
-        XCTAssertTrue(loaded.scenes[0].blurEnabled)
+        XCTAssertEqual(loaded.scenes[0].layers.count, 1)
     }
 
     func testRapidSavesAreDebouncedToTheLastOne() async throws {

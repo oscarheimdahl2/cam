@@ -4,6 +4,8 @@ import SwiftUI
 struct EditorView: View {
     @ObservedObject var model: AppModel
     @State private var showInspector = true
+    /// Flip the preview like a mirror. Off by default: what you see is what other people see. The output is never flipped.
+    @AppStorage("mirrorPreview") private var mirrorPreview = false
 
     var body: some View {
         NavigationSplitView {
@@ -31,11 +33,14 @@ struct EditorView: View {
                     }
                 }
                 .help("Add a particle effect: snow, fireflies, confetti…")
+                Toggle(isOn: $mirrorPreview) {
+                    Label("Mirror Preview", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
+                }
+                .help("Flip the preview like a mirror. Text reads backwards while it's on. What other people see is never flipped.")
                 Button("Inspector", systemImage: "sidebar.right") { showInspector.toggle() }
                     .help("Show or hide the inspector")
             }
         }
-        .background(WindowFloater())
         .onAppear { model.setEditorOpen(true) }
         .onDisappear { model.setEditorOpen(false) }
     }
@@ -65,18 +70,5 @@ struct StatusFooter: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(.bar)
-    }
-}
-
-/// Keeps the editor window above other apps' windows. (`.windowLevel` needs macOS 15, we target 14.)
-struct WindowFloater: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async { view.window?.level = .floating }
-        return view
-    }
-
-    func updateNSView(_ view: NSView, context: Context) {
-        DispatchQueue.main.async { view.window?.level = .floating }
     }
 }

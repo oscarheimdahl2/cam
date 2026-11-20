@@ -2,7 +2,7 @@ import AVFoundation
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
-/// Turns a raw camera frame into the final frame: the real background (optionally blurred), stickers behind
+/// Turns a raw camera frame into the final frame: the real picture, with layers behind
 /// the person, and "in front" layers over them.
 ///
 /// The pieces live in their own types: `PersonSegmenter`, `LayerRenderer` (+ `TextRenderer`, `StickerLook`, `PartyStyle`)
@@ -37,15 +37,10 @@ final class Compositor {
         }
 
         var result = base
-        // The person cut-out is only needed to put things behind them (layers or a blurred background).
-        if scene.blurEnabled || !behind.isEmpty, let mask = segmenter.mask(for: frame) {
+        // The person cut-out is only needed to put layers behind them. (Background blur isn't done here: macOS's own
+        // Portrait effect is applied to the camera picture before Cam receives it.)
+        if !behind.isEmpty, let mask = segmenter.mask(for: frame) {
             var background = base
-            if scene.blurEnabled {
-                let sigma = scene.blurRadius * OutputFrame.size.width / 1920
-                background = base.clampedToExtent()
-                    .applyingGaussianBlur(sigma: sigma)
-                    .cropped(to: OutputFrame.rect)
-            }
             for (index, layer) in behind {
                 if let image = draw(layer, index) { background = image.composited(over: background) }
             }
