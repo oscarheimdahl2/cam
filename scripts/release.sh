@@ -5,6 +5,9 @@
 #   scripts/release.sh --skip-notarize build, sign and package only (to test the packaging; Gatekeeper will still warn)
 #   BUILD_NUMBER=1795168971 scripts/release.sh   pin the build number (the extension version) instead of using the clock
 #
+# In CI (.github/workflows/release.yml) the keychain profile is replaced by an App Store Connect API key:
+#   ASC_KEY_PATH=<AuthKey.p8> ASC_KEY_ID=<id> ASC_ISSUER_ID=<issuer> scripts/release.sh
+#
 # One-time setup, in your own Terminal (so the password never ends up in a chat or a log):
 #   xcrun notarytool store-credentials "cam-notary" --apple-id "<your apple id>" --team-id "<your team id>"
 # It asks for an app-specific password (account.apple.com > Sign-In and Security > App-Specific Passwords).
@@ -14,6 +17,15 @@ cd "$(dirname "$0")/.."
 PROFILE="cam-notary"
 SKIP_NOTARIZE=0
 [[ "${1:-}" == "--skip-notarize" ]] && SKIP_NOTARIZE=1
+
+# Notarization and provisioning credentials: an API key in CI, otherwise the keychain profile.
+if [[ -n "${ASC_KEY_PATH:-}" ]]; then
+  NOTARY_AUTH=(--key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
+  XCODE_AUTH=(-authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+else
+  NOTARY_AUTH=(--keychain-profile "$PROFILE")
+  XCODE_AUTH=()
+fi
 
 TEAM_ID=$(sed -n 's/^ *TEAM_ID: *\([A-Z0-9]*\).*/\1/p' project.yml | head -1)
 VERSION=$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9.]*\)"\{0,1\}.*/\1/p' project.yml | head -1)
@@ -34,7 +46,7 @@ xcodegen generate >/dev/null
 
 echo "== 2/6 Archive (Release)"
 xcodebuild archive -project Cam.xcodeproj -scheme Cam -configuration Release \
-  -archivePath "$ARCHIVE" -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
+  -archivePath "$ARCHIVE" -allowProvisioningUpdates -allowProvisioningDeviceRegistration ${XCODE_AUTH[@]+"${XCODE_AUTH[@]}"} \
   CURRENT_PROJECT_VERSION="$BUILD" -quiet
 
 echo "== 3/6 Export signed with Developer ID"
@@ -48,7 +60,7 @@ cat > "$OUT/ExportOptions.plist" <<PLIST
 </dict></plist>
 PLIST
 xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$OUT/ExportOptions.plist" \
-  -exportPath "$EXPORT" -allowProvisioningUpdates -quiet
+  -exportPath "$EXPORT" -allowProvisioningUpdates ${XCODE_AUTH[@]+"${XCODE_AUTH[@]}"} -quiet
 APP="$EXPORT/Cam.app"
 codesign --verify --deep --strict "$APP"
 "$(dirname "$0")/check-no-user-data.sh" "$APP"   # a fresh install must start empty
@@ -56,7 +68,7 @@ codesign --verify --deep --strict "$APP"
 if [[ $SKIP_NOTARIZE -eq 0 ]]; then
   echo "== 4/6 Notarize the app (Apple scans it; usually a few minutes)"
   ditto -c -k --keepParent "$APP" "$OUT/Cam-notarize.zip"
-  xcrun notarytool submit "$OUT/Cam-notarize.zip" --keychain-profile "$PROFILE" --wait
+  xcrun notarytool submit "$OUT/Cam-notarize.zip" "${NOTARY_AUTH[@]}" --wait
   xcrun stapler staple "$APP"
 else
   echo "== 4/6 Notarize: skipped"
@@ -68,7 +80,7 @@ mkdir -p "$STAGE"; cp -R "$APP" "$STAGE/Cam.app"; ln -s /Applications "$STAGE/Ap
 hdiutil create -volname "Cam" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 codesign --sign "$IDENTITY" --timestamp "$DMG"
 if [[ $SKIP_NOTARIZE -eq 0 ]]; then
-  xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait
+  xcrun notarytool submit "$DMG" "${NOTARY_AUTH[@]}" --wait
   xcrun stapler staple "$DMG"
 fi
 
