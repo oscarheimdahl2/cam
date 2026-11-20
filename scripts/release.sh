@@ -21,9 +21,11 @@ SKIP_NOTARIZE=0
 # Notarization and provisioning credentials: an API key in CI, otherwise the keychain profile.
 if [[ -n "${ASC_KEY_PATH:-}" ]]; then
   NOTARY_AUTH=(--key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
+  UNSIGNED_ARCHIVE=${UNSIGNED_ARCHIVE:-1}
   XCODE_AUTH=(-authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
 else
   NOTARY_AUTH=(--keychain-profile "$PROFILE")
+  UNSIGNED_ARCHIVE=${UNSIGNED_ARCHIVE:-0}
   XCODE_AUTH=()
 fi
 
@@ -45,8 +47,15 @@ echo "== 1/6 Generate the project"
 xcodegen generate >/dev/null
 
 echo "== 2/6 Archive (Release)"
+# A CI runner is not a registered development device, so it can't get a development profile. There the archive is
+# left unsigned and the export step below signs it for Developer ID (which needs no device).
+if [[ "$UNSIGNED_ARCHIVE" == 1 ]]; then
+  ARCHIVE_SIGNING=(CODE_SIGNING_ALLOWED=NO)
+else
+  ARCHIVE_SIGNING=(-allowProvisioningUpdates -allowProvisioningDeviceRegistration ${XCODE_AUTH[@]+"${XCODE_AUTH[@]}"})
+fi
 xcodebuild archive -project Cam.xcodeproj -scheme Cam -configuration Release \
-  -archivePath "$ARCHIVE" -allowProvisioningUpdates -allowProvisioningDeviceRegistration ${XCODE_AUTH[@]+"${XCODE_AUTH[@]}"} \
+  -archivePath "$ARCHIVE" "${ARCHIVE_SIGNING[@]}" \
   CURRENT_PROJECT_VERSION="$BUILD" -quiet
 
 echo "== 3/6 Export signed with Developer ID"
