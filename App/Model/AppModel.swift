@@ -67,6 +67,7 @@ final class AppModel: ObservableObject {
     // MARK: Status
 
     var statusLine: String {
+        if let problem = installer.problem { return problem }   // a failed install must not be hidden by an old camera
         guard virtualCameraInstalled else { return installer.status }
         return consumers > 0 ? "Live in a meeting app" : "Ready for Teams"
     }

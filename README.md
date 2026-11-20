@@ -13,7 +13,7 @@ Everything runs on your Mac. Cam's own code makes no network connections, and yo
 ## Install
 
 1. Download `Cam-0.1.dmg` from the [latest release](../../releases/latest) and open it.
-2. Drag **Cam** into **Applications**, then open it from there. (The virtual camera can only be installed from `/Applications`.)
+2. Drag **Cam** into **Applications**, then open it from there, *not* from the disk image or Downloads. (macOS only installs the virtual camera for an app that lives in `/Applications`. If you skip this, Cam tells you to move it.)
 3. Click the Cam icon in the menu bar and choose **Install / Update Virtual Camera**.
 4. macOS will say a system extension was blocked. Open **System Settings → General → Login Items & Extensions → Camera Extensions** and switch **Cam** on.
 5. In your meeting app, choose **Cam** as the camera. Quit and reopen the app first if Cam isn't listed.
