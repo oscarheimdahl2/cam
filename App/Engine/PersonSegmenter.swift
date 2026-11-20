@@ -18,7 +18,10 @@ final class PersonSegmenter {
         let toFrame = CGAffineTransform(
             scaleX: CGFloat(CVPixelBufferGetWidth(frame)) / CGFloat(CVPixelBufferGetWidth(buffer)),
             y: CGFloat(CVPixelBufferGetHeight(frame)) / CGFloat(CVPixelBufferGetHeight(buffer)))
+        // Clamp first: blurring at the frame edge would otherwise pull in transparent black and fade the mask there,
+        // leaving a sliver of background where the person touches the edge.
         return OutputFrame.fit(CIImage(cvPixelBuffer: buffer).transformed(by: toFrame))
+            .clampedToExtent()
             .applyingGaussianBlur(sigma: 1.5)
             .cropped(to: OutputFrame.rect)
     }
