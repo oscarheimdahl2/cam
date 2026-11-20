@@ -24,16 +24,6 @@ struct EditorView: View {
         .navigationTitle(model.scene.name)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button("Add Images", systemImage: "photo.badge.plus") { model.pickImages() }
-                    .help("Add image layers (or drop images onto the preview)")
-                Button("Add Text", systemImage: "textformat") { model.addTextLayer() }
-                    .help("Add a text layer")
-                Menu("Add Effect", systemImage: "sparkles") {
-                    ForEach(ParticlePreset.allCases) { preset in
-                        Button(preset.title) { model.addEffectLayer(preset) }
-                    }
-                }
-                .help("Add a particle effect: snow, fireflies, confetti…")
                 Toggle(isOn: $mirrorPreview) {
                     Label("Mirror Preview", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
                 }

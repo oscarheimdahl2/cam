@@ -95,7 +95,7 @@ final class LayerRenderer {
                 "inputRVector": row(tint.r),
                 "inputGVector": row(tint.g),
                 "inputBVector": row(tint.b),
-                "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+                "inputAVector": CIVector(x: 0, y: 0, z: 0, w: tint.a),
             ])
         }
     }

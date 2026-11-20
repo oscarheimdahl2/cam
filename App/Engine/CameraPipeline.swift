@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreImage
+import CoreImage.CIFilterBuiltins
 
 struct CameraChoice: Identifiable, Hashable {
     let id: String
@@ -20,6 +21,8 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     private let lock = NSLock()
     private var settings = Settings(scene: CamScene(name: ""), stickersEnabled: true)
     private var sendToVirtualCamera = false
+    /// The scene being faded out; `start` is the camera time of the first frame of the fade. Guarded by `lock`.
+    private var fade: (from: CamScene, start: Double?)?
     private var previewHandler: ((CGImage, FaceState?) -> Void)?
     private let faceTracker = FaceTracker()
     private var lastPreview = Date.distantPast
@@ -40,8 +43,17 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
 
     // MARK: Control (call from main)
 
+    /// How long switching scenes cross-fades, in seconds.
+    static let fadeDuration = 0.5
+
     func update(_ settings: Settings) {
-        lock.lock(); self.settings = settings; lock.unlock()
+        lock.lock()
+        // Switching to another scene fades from the old one (a rapid second switch fades from the one on screen).
+        if settings.scene.id != self.settings.scene.id, !self.settings.scene.name.isEmpty || !self.settings.scene.layers.isEmpty {
+            fade = (from: self.settings.scene, start: nil)
+        }
+        self.settings = settings
+        lock.unlock()
     }
 
     /// The virtual camera disappeared (for instance its extension was replaced): drop the old frame pipe, so a new one
@@ -139,18 +151,37 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         guard let frame = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         lock.lock()
         let settings = self.settings, toCamera = sendToVirtualCamera, preview = previewHandler
-        lock.unlock()
-
         // Camera timestamp, not "now": steady even when processing time varies.
         let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
+        var outgoing: (scene: CamScene, progress: Double)?
+        if var current = fade {
+            let start = current.start ?? time
+            let progress = (time - start) / Self.fadeDuration
+            if progress >= 1 || progress < 0 { fade = nil } else {
+                current.start = start
+                fade = current
+                outgoing = (current.from, progress)
+            }
+        }
+        lock.unlock()
+
         // Face detection only runs when something needs it: a head sticker in this scene, or the editor is open
         // (so ticking "Follow head" can use your live face).
-        let needsFace = (settings.stickersEnabled && settings.scene.layers.contains { $0.followsHead }) || preview != nil
+        let needsFace = (settings.stickersEnabled && (settings.scene.layers + (outgoing?.scene.layers ?? [])).contains { $0.followsHead }) || preview != nil
         var face: FaceState?
         if needsFace { face = faceTracker.update(frame: frame, time: time) } else { faceTracker.reset() }
 
-        let image = compositor.render(frame: frame, scene: settings.scene, stickersEnabled: settings.stickersEnabled,
+        var image = compositor.render(frame: frame, scene: settings.scene, stickersEnabled: settings.stickersEnabled,
                                       time: time, face: face)
+        if let outgoing {
+            let old = compositor.render(frame: frame, scene: outgoing.scene, stickersEnabled: settings.stickersEnabled,
+                                        time: time, face: face)
+            let dissolve = CIFilter.dissolveTransition()
+            dissolve.inputImage = old
+            dissolve.targetImage = image
+            dissolve.time = Float(outgoing.progress)
+            image = dissolve.outputImage?.cropped(to: OutputFrame.rect) ?? image
+        }
 
         if toCamera, link.openSink() || link.isSinkOpen, let buffer = makeOutputBuffer() {
             compositor.render(image, to: buffer)

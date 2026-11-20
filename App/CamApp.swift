@@ -3,6 +3,9 @@ import SwiftUI
 @main
 struct CamApp: App {
     @StateObject private var model = AppModel()
+    #if DEV_BUILD
+    @Environment(\.openWindow) private var openWindow
+    #endif
 
     var body: some Scene {
         MenuBarExtra {
@@ -16,6 +19,11 @@ struct CamApp: App {
                 Text("DEV").font(.system(size: 11, weight: .bold))
             }
             .foregroundStyle(.red)
+            // The dev build opens the editor by itself, so a rebuild (scripts/dev.sh) lands straight in it.
+            .onAppear {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "editor")
+            }
             #else
             Image("MenuIcon")
             #endif

@@ -14,6 +14,8 @@ struct LayerHandle: View {
     /// However far a layer is dragged, at least this much of it (on screen, in points) stays inside the video, so it
     /// can always be grabbed again.
     private static let minVisiblePoints = 24.0
+    /// How far (in points) the pointer has to travel before a drag moves the layer.
+    private static let dragDeadZone = 4.0
 
     private var selected: Bool { model.selectedLayerID == layer.id }
 
@@ -30,6 +32,7 @@ struct LayerHandle: View {
                     .overlay(Rectangle().stroke(selected ? Color.accentColor : Color.clear, lineWidth: 2))
                     .frame(width: boxWidth, height: boxHeight)
                     .gesture(moveGesture(place))
+                    .onTapGesture { model.selectedLayerID = layer.id }   // a plain click selects, without moving anything
                 if selected {
                     handle(systemImage: "arrow.up.left.and.arrow.down.right")
                         .position(x: boxWidth / 2, y: boxHeight / 2)
@@ -57,10 +60,11 @@ struct LayerHandle: View {
     }
 
     private func moveGesture(_ place: Placement) -> some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .named("canvas"))
+        // A small dead zone, so a click or a slightly shaky hand doesn't nudge the layer.
+        DragGesture(minimumDistance: Self.dragDeadZone, coordinateSpace: .named("canvas"))
             .onChanged { value in
                 model.selectedLayerID = layer.id
-                if dragStart == nil { dragStart = (place, value.location) }
+                if dragStart == nil { dragStart = (place, value.startLocation) }
                 guard let start = dragStart else { return }
                 var p = start.placement
                 let dx = Double((value.location.x - start.point.x) / canvas.width)

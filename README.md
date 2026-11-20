@@ -12,7 +12,7 @@ Everything runs on your Mac. Cam's own code makes no network connections, and yo
 
 ## Install
 
-1. Download `Cam-0.1.dmg` from the [Releases page](../../releases) and open it.
+1. Download `Cam-0.2.dmg` from the [Releases page](../../releases) and open it.
 2. Drag **Cam** into **Applications**, then open it from there, *not* from the disk image or Downloads. (macOS only installs the virtual camera for an app that lives in `/Applications`. If you skip this, Cam tells you to move it.)
 3. Click the Cam icon in the menu bar and choose **Install / Update Virtual Camera**.
 4. macOS will say a system extension was blocked. Open **System Settings → General → Login Items & Extensions → Camera Extensions** and switch **Cam** on.
@@ -31,7 +31,7 @@ Choose **Uninstall Virtual Camera…** from the menu bar icon, then drag Cam out
 
 - macOS 14 or later (developed and tested on macOS 27, Apple Silicon). The download is a universal build, but Intel Macs and macOS 14 to 26 have not been tested.
 - Confirmed working in **Photo Booth**. Other apps that list cameras (Teams, Zoom, Meet) should work the same way, but have not all been tested. Reports are welcome as issues.
-- This is an early release (0.1). Expect rough edges.
+- This is an early release (0.2). Expect rough edges.
 - Some organisations block system extensions on managed Macs. If yours does, the virtual camera can't be installed.
 
 ## Check your download
@@ -39,8 +39,8 @@ Choose **Uninstall Virtual Camera…** from the menu bar icon, then drag Cam out
 The app and the DMG are signed with a Developer ID and notarized by Apple. After downloading, you can check that yourself:
 
 ```
-shasum -a 256 Cam-0.1.dmg                       # compare with the checksum in the release notes
-spctl --assess --type open --context context:primary-signature -v Cam-0.1.dmg
+shasum -a 256 Cam-0.2.dmg                       # compare with the checksum in the release notes
+spctl --assess --type open --context context:primary-signature -v Cam-0.2.dmg
 codesign -dvv /Applications/Cam.app             # shows who signed it
 ```
 

@@ -17,16 +17,43 @@ struct InspectorView: View {
             Form {
                 if let layer = selectedLayer {
                     SelectedLayerSections(model: model, layer: layer)
-                } else {
-                    Section {
-                        Text("Select a layer to change its options.")
-                            .foregroundStyle(.secondary)
-                    }
                 }
             }
             .formStyle(.grouped)
             .frame(minHeight: 150)
         }
+    }
+}
+
+private func addLabel(_ title: String, _ systemImage: String) -> some View {
+    VStack(spacing: 4) {
+        Image(systemName: systemImage).font(.system(size: 17, weight: .semibold))
+        Text(title).font(.system(size: 11, weight: .semibold, design: .rounded))
+    }
+    .frame(maxWidth: .infinity)
+}
+
+/// A colourful rounded tile that lifts on hover and squishes when pressed.
+private struct AddTileStyle: ButtonStyle {
+    let colors: [Color]
+    @State private var hovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)   // fixed, so the Effect menu comes out the same size as the two buttons
+            .background(
+                LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .opacity(hovering ? 1 : 0.88),
+                in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .shadow(color: colors[0].opacity(hovering ? 0.5 : 0.25), radius: hovering ? 8 : 3, y: 2)
+            .scaleEffect(configuration.isPressed ? 0.93 : (hovering ? 1.05 : 1))
+            .rotationEffect(.degrees(hovering && !configuration.isPressed ? -2 : 0))
+            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: hovering)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
+            .onHover { hovering = $0 }
+            .contentShape(Rectangle())
     }
 }
 
@@ -39,21 +66,27 @@ private struct LayersPanel: View {
             HStack {
                 Text("Layers").font(.headline)
                 Spacer()
-                Toggle("Show", isOn: model.stickersEnabledBinding)
-                    .toggleStyle(.checkbox)
-                    .help("Show or hide all layers")
-                Menu("Add") {
-                    Button("Images…", systemImage: "photo") { model.pickImages() }
-                    Button("Text", systemImage: "textformat") { model.addTextLayer() }
-                    Menu("Effect", systemImage: "sparkles") {
-                        ForEach(ParticlePreset.allCases) { preset in
-                            Button(preset.title) { model.addEffectLayer(preset) }
-                        }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+
+            // The three ways to add a layer, side by side with equal weight.
+            HStack(spacing: 6) {
+                Button { model.pickImages() } label: { addLabel("Image", "photo.fill.on.rectangle.fill") }
+                    .buttonStyle(AddTileStyle(colors: [.pink, .orange]))
+                    .help("Add image layers (or drop images onto the preview)")
+                Button { model.addTextLayer() } label: { addLabel("Text", "textformat") }
+                    .buttonStyle(AddTileStyle(colors: [.blue, .cyan]))
+                    .help("Add a text layer")
+                Menu {
+                    ForEach(ParticlePreset.allCases) { preset in
+                        Button(preset.title) { model.addEffectLayer(preset) }
                     }
-                }
-                .menuStyle(.button)
-                .controlSize(.small)
-                .fixedSize()
+                } label: { addLabel("Effect", "sparkles") }
+                    .menuStyle(.button)
+                    .menuIndicator(.hidden)
+                    .buttonStyle(AddTileStyle(colors: [.purple, .indigo]))
+                    .help("Add a particle effect: snow, fireflies, confetti…")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -81,13 +114,6 @@ private struct LayersPanel: View {
             }
             .onDeleteCommand {
                 if let id = model.selectedLayerID { model.deleteLayer(id) }
-            }
-
-            if !model.scene.layers.isEmpty {
-                Text("Drag a row to reorder. Layers sit behind you unless they are set to be in front.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -158,7 +184,7 @@ private struct SelectedLayerSections: View {
                 Toggle("Custom color", isOn: model.effectTintEnabledBinding(layer.id))
                     .help("Recolors the whole effect, like a color filter")
                 if effect.tint != nil {
-                    ColorPicker("Color", selection: model.effectTintColorBinding(layer.id), supportsOpacity: false)
+                    ColorPicker("Color", selection: model.effectTintColorBinding(layer.id), supportsOpacity: true)
                 }
                 if effect.preset.isBurstOnly {
                     Button("Pop now", systemImage: "sparkles") { model.particles.burst(layer: layer.id) }

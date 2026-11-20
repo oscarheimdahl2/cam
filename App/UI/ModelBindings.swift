@@ -3,10 +3,6 @@ import SwiftUI
 /// Bindings the views use to read and write the model. Each one sets the value it is given (never "toggles"),
 /// so a binding is always safe to call twice.
 extension AppModel {
-    var stickersEnabledBinding: Binding<Bool> {
-        Binding(get: { self.config.stickersEnabled }, set: { self.config.stickersEnabled = $0 })
-    }
-
     var activeSceneBinding: Binding<UUID> {
         Binding(get: { self.scene.id }, set: { self.selectScene($0) })
     }
@@ -58,14 +54,14 @@ extension AppModel {
         Binding(
             get: {
                 if case .particles(let content)? = self.scene.layers.first(where: { $0.id == id })?.content, let tint = content.tint {
-                    return tint.color
+                    return tint.color(withOpacity: true)
                 }
                 return .white
             },
             set: { color in
                 self.updateLayer(id) {
                     if case .particles(var content) = $0.content,
-                       let rgba = RGBAColor(color: color, keeping: content.tint ?? RGBAColor(r: 1, g: 1, b: 1)) {
+                       let rgba = RGBAColor(color: color, keeping: content.tint ?? RGBAColor(r: 1, g: 1, b: 1), takingOpacityFromColor: true) {
                         content.tint = rgba
                         $0.content = .particles(content)
                     }
@@ -99,9 +95,13 @@ extension RGBAColor {
     /// The colour as SwiftUI shows it (opacity is edited separately, so it's not included).
     var color: Color { Color(.sRGB, red: r, green: g, blue: b, opacity: 1) }
 
-    /// A colour picked in a ColorPicker, keeping `other`'s opacity.
-    init?(color: Color, keeping other: RGBAColor) {
+    /// The colour with its opacity, for a ColorPicker that has an opacity slider.
+    func color(withOpacity: Bool) -> Color { Color(.sRGB, red: r, green: g, blue: b, opacity: withOpacity ? a : 1) }
+
+    /// A colour picked in a ColorPicker, keeping `other`'s opacity (or the picked opacity, if the picker has a slider).
+    init?(color: Color, keeping other: RGBAColor, takingOpacityFromColor: Bool = false) {
         guard let ns = NSColor(color).usingColorSpace(.sRGB) else { return nil }
-        self.init(r: Double(ns.redComponent), g: Double(ns.greenComponent), b: Double(ns.blueComponent), a: other.a)
+        self.init(r: Double(ns.redComponent), g: Double(ns.greenComponent), b: Double(ns.blueComponent),
+                  a: takingOpacityFromColor ? Double(ns.alphaComponent) : other.a)
     }
 }

@@ -22,13 +22,15 @@ extension RGBAColor {
 struct CamScene: Codable, Identifiable, Equatable {
     var id = UUID()
     var name: String
+    /// SF Symbol shown in the scene list. Chosen by the user.
+    var icon = SceneIcon.defaultName
     /// Back (first) to front (last).
     var layers: [Layer] = []
 }
 
 extension CamScene {
     private enum CodingKeys: String, CodingKey {
-        case id, name, layers
+        case id, name, icon, layers
         // Read-only, for files saved by older versions:
         case stickers, partyMode
     }
@@ -38,6 +40,7 @@ extension CamScene {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         name = try c.decode(String.self, forKey: .name)
+        let savedIcon = try c.decodeIfPresent(String.self, forKey: .icon)
         if let saved = try c.decodeIfPresent([Layer].self, forKey: .layers) {
             layers = saved
         } else {
@@ -48,14 +51,29 @@ extension CamScene {
         if try c.decodeIfPresent(Bool.self, forKey: .partyMode) == true {
             for i in layers.indices where layers[i].isSticker { layers[i].party = true }
         }
+        // Scenes saved before icons were editable showed one picked from their contents; keep that as the starting icon.
+        icon = savedIcon ?? (layers.contains { $0.party } ? "sparkles" : SceneIcon.defaultName)
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
         try c.encode(name, forKey: .name)
+        try c.encode(icon, forKey: .icon)
         try c.encode(layers, forKey: .layers)
     }
+}
+
+enum SceneIcon {
+    static let defaultName = "photo.on.rectangle"
+    /// The symbols offered in the icon picker.
+    static let choices = [
+        "photo.on.rectangle", "sparkles", "star.fill", "heart.fill", "flame.fill", "bolt.fill",
+        "party.popper.fill", "gift.fill", "balloon.2.fill", "snowflake", "sun.max.fill", "moon.stars.fill",
+        "cloud.fill", "leaf.fill", "pawprint.fill", "crown.fill", "theatermasks.fill", "camera.fill",
+        "video.fill", "mic.fill", "briefcase.fill", "laptopcomputer", "graduationcap.fill", "gamecontroller.fill",
+        "music.note", "paintpalette.fill", "face.smiling.fill", "hand.thumbsup.fill", "eyeglasses", "tshirt.fill",
+    ]
 }
 
 struct CamConfig: Codable, Equatable {

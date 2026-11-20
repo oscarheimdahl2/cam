@@ -183,4 +183,17 @@ final class ConfigStoreTests: XCTestCase {
         let loaded = ConfigStore(folder: folder).load()
         XCTAssertTrue(loaded.scenes.contains { $0.id == loaded.activeSceneID })
     }
+
+    private func decode(_ json: String) throws -> CamScene { try JSONDecoder().decode(CamScene.self, from: Data(json.utf8)) }
+
+    func testSceneIconSurvivesAndOldScenesKeepTheirLook() throws {
+        var scene = CamScene(name: "I")
+        scene.icon = "heart.fill"
+        let back = try JSONDecoder().decode(CamScene.self, from: JSONEncoder().encode(scene))
+        XCTAssertEqual(back.icon, "heart.fill")
+        let old = try decode(#"{"id":"7B1E2C1A-5D0B-4C58-9A57-3E9B1E0C6A30","name":"Old","layers":[]}"#)
+        XCTAssertEqual(old.icon, SceneIcon.defaultName)
+        let party = try decode(#"{"id":"7B1E2C1A-5D0B-4C58-9A57-3E9B1E0C6A30","name":"P","partyMode":true,"layers":[{"id":"7B1E2C1A-5D0B-4C58-9A57-3E9B1E0C6A31","content":{"image":{"file":"a.png"}},"anchor":{"frame":{"_0":{"x":0.5,"y":0.5,"width":0.2,"rotation":0}}}}]}"#)
+        XCTAssertEqual(party.icon, "sparkles")
+    }
 }

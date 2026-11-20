@@ -30,14 +30,74 @@ final class AppModel: ObservableObject {
     let particleFramesForTesting: ParticleFrames
     private let cameraEnabled: Bool
     private var editorOpen = false
+    /// The scene being cross-faded away from after a scene switch.
+    private var fadingOut: CamScene?
+    private var fadeTask: Task<Void, Never>?
     private var timer: Timer?
     private var cancellables: Set<AnyCancellable> = []
     private let discovery = CameraPipeline.makeDiscovery()
     private var camerasObservation: NSKeyValueObservation?
 
-    nonisolated static var defaultFolder: URL {
+    private nonisolated static let folderKey = "dataFolder"
+
+    nonisolated static var standardFolder: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Cam", isDirectory: true)
+    }
+
+    /// The folder the user picked in "Data Folder…", or the standard one in Application Support.
+    nonisolated static var defaultFolder: URL {
+        if let path = UserDefaults.standard.string(forKey: folderKey), !path.isEmpty {
+            return URL(fileURLWithPath: path, isDirectory: true)
+        }
+        return standardFolder
+    }
+
+    var dataFolder: URL { store.folder }
+
+    /// Asks for a new folder for the config and stickers, copies the current ones over (unless the folder already
+    /// holds a Cam config, which is then used as it is) and relaunches so every part of the app uses the new place.
+    func chooseDataFolder() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose the folder for your scenes and stickers"
+        panel.prompt = "Use Folder"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.directoryURL = dataFolder
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        moveData(to: url)
+    }
+
+    func resetDataFolder() { moveData(to: Self.standardFolder) }
+
+    private func moveData(to target: URL) {
+        let source = store.folder
+        guard target.standardizedFileURL != source.standardizedFileURL else { return }
+        store.flush()
+        let fm = FileManager.default
+        try? fm.createDirectory(at: target, withIntermediateDirectories: true)
+        if !fm.fileExists(atPath: target.appendingPathComponent("config.json").path) {
+            for name in ["config.json", "stickers"] {
+                let from = source.appendingPathComponent(name), to = target.appendingPathComponent(name)
+                guard fm.fileExists(atPath: from.path) else { continue }
+                try? fm.removeItem(at: to)   // an empty stickers folder the store created
+                do { try fm.copyItem(at: from, to: to) } catch {
+                    CamLog.app.error("copying \(name, privacy: .public) to the new folder failed: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+        }
+        UserDefaults.standard.set(target.path, forKey: Self.folderKey)
+        relaunch()
+    }
+
+    private func relaunch() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "sleep 0.7; /usr/bin/open -n \"$0\"", Bundle.main.bundlePath]
+        try? task.run()
+        NSApp.terminate(nil)
     }
 
     /// `folder` is where the config and sticker images live. `cameraEnabled: false` never touches the camera
@@ -51,6 +111,7 @@ final class AppModel: ObservableObject {
         pipeline = CameraPipeline(stickersDir: store.stickersDirectory, link: link, particleFrames: particleFrames)
         self.cameraEnabled = cameraEnabled
         config = store.load()
+        config.stickersEnabled = true   // there is no switch for this any more, so a config saved with it off must not hide layers for good
         pushSettingsToPipeline()
         syncParticles()
 
@@ -134,7 +195,8 @@ final class AppModel: ObservableObject {
 
     /// Particle effects only run for visible layers, and only while the editor or an app is using the camera.
     private func syncParticles() {
-        particles.sync(layers: config.stickersEnabled ? config.activeScene.layers : [])
+        // The scene fading out keeps its particle effects running until the fade is over.
+        particles.sync(layers: config.stickersEnabled ? config.activeScene.layers + (fadingOut?.layers ?? []) : [])
     }
 
     private func pushSettingsToPipeline() {
@@ -159,6 +221,16 @@ final class AppModel: ObservableObject {
     var scene: CamScene { config.activeScene }
 
     func selectScene(_ id: UUID) {
+        if id != config.activeScene.id, cameraEnabled {
+            fadingOut = config.activeScene
+            fadeTask?.cancel()
+            fadeTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(CameraPipeline.fadeDuration + 0.1))
+                guard !Task.isCancelled else { return }
+                self?.fadingOut = nil
+                self?.syncParticles()
+            }
+        }
         config.activeSceneID = id
         selectedLayerID = nil
     }
@@ -181,6 +253,16 @@ final class AppModel: ObservableObject {
     func renameScene(_ id: UUID, to name: String) {
         guard let i = config.scenes.firstIndex(where: { $0.id == id }) else { return }
         config.scenes[i].name = name
+    }
+
+    /// Reorders the scene list. The menu bar lists scenes in the same order.
+    func moveScenes(fromOffsets source: IndexSet, toOffset destination: Int) {
+        config.scenes.move(fromOffsets: source, toOffset: destination)
+    }
+
+    func setSceneIcon(_ id: UUID, to icon: String) {
+        guard let i = config.scenes.firstIndex(where: { $0.id == id }) else { return }
+        config.scenes[i].icon = icon
     }
 
     func deleteScene(_ id: UUID) {
