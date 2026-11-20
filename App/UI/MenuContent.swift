@@ -6,9 +6,11 @@ struct MenuContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Text("Camera: \(model.statusLine)")
+        #if DEV_BUILD
+        Text("DEV BUILD: editor only, no virtual camera").foregroundStyle(.red)
         Divider()
-        Toggle("Stickers", isOn: model.stickersEnabledBinding)
+        #endif
+        Text("Camera: \(model.statusLine)")
         Divider()
         Picker("Scene", selection: model.activeSceneBinding) {
             ForEach(model.config.scenes) { Text($0.name).tag($0.id) }

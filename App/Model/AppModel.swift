@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Combine
 import ServiceManagement
 
@@ -13,6 +14,9 @@ final class AppModel: ObservableObject {
     /// Whether the virtual camera is installed, and how many apps are reading it. Refreshed once a second.
     @Published private(set) var virtualCameraInstalled = false
     @Published private(set) var consumers = 0
+    /// The cameras Cam can read, and the one picked (`nil`: the first one found). Remembered between launches.
+    @Published private(set) var cameras: [CameraChoice] = []
+    @Published private(set) var selectedCameraID: String? = UserDefaults.standard.string(forKey: "cameraID")
 
     let preview = PreviewState()
     let installer = ExtensionInstaller()
@@ -28,6 +32,8 @@ final class AppModel: ObservableObject {
     private var editorOpen = false
     private var timer: Timer?
     private var cancellables: Set<AnyCancellable> = []
+    private let discovery = CameraPipeline.makeDiscovery()
+    private var camerasObservation: NSKeyValueObservation?
 
     nonisolated static var defaultFolder: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -57,6 +63,11 @@ final class AppModel: ObservableObject {
             .store(in: &cancellables)
 
         if cameraEnabled {
+            pipeline.setCamera(id: selectedCameraID)
+            camerasObservation = discovery.observe(\.devices, options: [.initial, .new]) { [weak self] discovery, _ in
+                let found = CameraPipeline.realCameras(in: discovery.devices).map { CameraChoice(id: $0.uniqueID, name: $0.localizedName) }
+                Task { @MainActor in self?.cameras = found }
+            }
             timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.poll() }
             }
@@ -96,6 +107,17 @@ final class AppModel: ObservableObject {
         NSApp.setActivationPolicy(open ? .regular : .accessory)
         if open { NSApp.activate(ignoringOtherApps: true) }
         refreshDemand()
+    }
+
+    func selectCamera(_ id: String?) {
+        selectedCameraID = id
+        UserDefaults.standard.set(id, forKey: "cameraID")
+        pipeline.setCamera(id: id)
+    }
+
+    /// macOS's Video Effects panel (Portrait, Studio Light…). Only the user can switch these; apps can't.
+    func openVideoEffects() {
+        AVCaptureDevice.showSystemUserInterface(.videoEffects)
     }
 
     private func refreshDemand() {

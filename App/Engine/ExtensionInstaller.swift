@@ -25,6 +25,7 @@ final class ExtensionInstaller: NSObject, OSSystemExtensionRequestDelegate, Obse
             return
         }
         status = "Installing…"
+        CamLog.app.notice("installer: asking macOS to install the virtual camera (from \(Bundle.main.bundlePath, privacy: .public))")
         let request = OSSystemExtensionRequest.activationRequest(
             forExtensionWithIdentifier: CamConstants.extensionBundleID, queue: .main)
         request.delegate = self
@@ -35,6 +36,7 @@ final class ExtensionInstaller: NSObject, OSSystemExtensionRequestDelegate, Obse
         lastAction = .uninstall
         problem = nil
         status = "Uninstalling…"
+        CamLog.app.notice("installer: asking macOS to uninstall the virtual camera")
         let request = OSSystemExtensionRequest.deactivationRequest(
             forExtensionWithIdentifier: CamConstants.extensionBundleID, queue: .main)
         request.delegate = self
@@ -42,13 +44,18 @@ final class ExtensionInstaller: NSObject, OSSystemExtensionRequestDelegate, Obse
     }
 
     func request(_ request: OSSystemExtensionRequest, actionForReplacingExtension existing: OSSystemExtensionProperties,
-                 withExtension ext: OSSystemExtensionProperties) -> OSSystemExtensionRequest.ReplacementAction { .replace }
+                 withExtension ext: OSSystemExtensionProperties) -> OSSystemExtensionRequest.ReplacementAction {
+        CamLog.app.notice("installer: replacing version \(existing.bundleVersion, privacy: .public) with \(ext.bundleVersion, privacy: .public)")
+        return .replace
+    }
 
     func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
+        CamLog.app.notice("installer: waiting for you to approve it in System Settings")
         status = "Approve the extension in System Settings → General → Login Items & Extensions → Camera Extensions"
     }
 
     func request(_ request: OSSystemExtensionRequest, didFinishWithResult result: OSSystemExtensionRequest.Result) {
+        CamLog.app.notice("installer: finished, result \(result.rawValue, privacy: .public) (0 = completed, 1 = needs a restart)")
         problem = nil
         switch (lastAction, result) {
         case (.install, .completed):
@@ -62,6 +69,7 @@ final class ExtensionInstaller: NSObject, OSSystemExtensionRequestDelegate, Obse
     func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
         let nsError = error as NSError
         let verb = lastAction == .install ? "install" : "uninstall"
+        CamLog.app.error("installer: failed, \(nsError.domain, privacy: .public) code \(nsError.code, privacy: .public): \(error.localizedDescription, privacy: .public)")
         if nsError.domain == OSSystemExtensionErrorDomain,
            OSSystemExtensionError.Code(rawValue: nsError.code) == .unsupportedParentBundleLocation {
             report("Move Cam to your Applications folder first, then open it from there and try again.",

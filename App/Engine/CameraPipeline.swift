@@ -1,6 +1,11 @@
 import AVFoundation
 import CoreImage
 
+struct CameraChoice: Identifiable, Hashable {
+    let id: String
+    let name: String
+}
+
 /// Captures the physical camera, composites each frame, and fans the result out
 /// to the virtual camera and/or the editor preview.
 final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -19,6 +24,11 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     private let faceTracker = FaceTracker()
     private var lastPreview = Date.distantPast
     private var configured = false
+    private var currentInput: AVCaptureDeviceInput?
+    /// Only touched on `queue`.
+    private var preferredCameraID: String?
+    /// Watches macOS's Portrait effect on the camera Cam reads, so it's logged when it turns on or off.
+    private var portraitObservation: NSKeyValueObservation?
 
     private(set) var isRunning = false
 
@@ -71,19 +81,29 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         }
     }
 
+    /// A camera Cam can read: any real camera, never Cam's own virtual one.
+    static func realCameras(in devices: [AVCaptureDevice]) -> [AVCaptureDevice] {
+        devices.filter { $0.localizedName != CamConstants.deviceName && $0.uniqueID != CamConstants.deviceUUID.uuidString }
+    }
+
+    static func makeDiscovery() -> AVCaptureDevice.DiscoverySession {
+        AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .external, .continuityCamera],
+                                         mediaType: .video, position: .unspecified)
+    }
+
+    /// Reads from this camera (`nil`: the first one found). Switches live if the camera is already running.
+    func setCamera(id: String?) {
+        queue.async {
+            guard self.preferredCameraID != id else { return }
+            self.preferredCameraID = id
+            if self.configured { _ = self.attachInput() }
+        }
+    }
+
     private func configureIfNeeded() -> Bool {
         if configured { return true }
-        let discovery = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInWideAngleCamera, .external, .continuityCamera],
-            mediaType: .video, position: .unspecified)
-        // Never capture our own virtual camera.
-        let device = discovery.devices.first {
-            $0.localizedName != CamConstants.deviceName && $0.uniqueID != CamConstants.deviceUUID.uuidString
-        }
-        guard let device, let input = try? AVCaptureDeviceInput(device: device) else { return false }
+        guard attachInput() else { return false }
         session.beginConfiguration()
-        if session.canSetSessionPreset(.hd1920x1080) { session.sessionPreset = .hd1920x1080 }
-        if session.canAddInput(input) { session.addInput(input) }
         output.alwaysDiscardsLateVideoFrames = true
         output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
         output.setSampleBufferDelegate(self, queue: queue)
@@ -91,6 +111,26 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         session.commitConfiguration()
         configured = true
         return true
+    }
+
+    /// Puts the chosen camera (or the first real one) on the session, replacing the previous one. Runs on `queue`.
+    private func attachInput() -> Bool {
+        let cameras = Self.realCameras(in: Self.makeDiscovery().devices)
+        let device = cameras.first { $0.uniqueID == preferredCameraID } ?? cameras.first
+        guard let device, device.uniqueID != currentInput?.device.uniqueID,
+              let input = try? AVCaptureDeviceInput(device: device) else { return currentInput != nil }
+        session.beginConfiguration()
+        if let old = currentInput { session.removeInput(old); currentInput = nil }
+        if session.canAddInput(input) { session.addInput(input); currentInput = input }
+        if session.canSetSessionPreset(.hd1920x1080) { session.sessionPreset = .hd1920x1080 }
+        session.commitConfiguration()
+        faceTracker.reset()
+        // For finding out where macOS applies its Portrait blur: "applied" means the picture Cam receives is already
+        // blurred, before any layer is added.
+        portraitObservation = device.observe(\.isPortraitEffectActive, options: [.initial, .new]) { device, _ in
+            CamLog.app.notice("Portrait effect on \(device.localizedName, privacy: .public): applied to Cam's picture: \(device.isPortraitEffectActive, privacy: .public)")
+        }
+        return currentInput != nil
     }
 
     // MARK: Frames

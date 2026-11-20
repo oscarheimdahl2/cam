@@ -6,6 +6,7 @@ struct EditorView: View {
     @State private var showInspector = true
     /// Flip the preview like a mirror. Off by default: what you see is what other people see. The output is never flipped.
     @AppStorage("mirrorPreview") private var mirrorPreview = false
+    @State private var showCameraSettings = false
 
     var body: some View {
         NavigationSplitView {
@@ -37,6 +38,9 @@ struct EditorView: View {
                     Label("Mirror Preview", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
                 }
                 .help("Flip the preview like a mirror. Text reads backwards while it's on. What other people see is never flipped.")
+                Button("Camera", systemImage: "video") { showCameraSettings.toggle() }
+                    .help("Choose the camera, and set up background blur")
+                    .popover(isPresented: $showCameraSettings) { CameraSettings(model: model) }
                 Button("Inspector", systemImage: "sidebar.right") { showInspector.toggle() }
                     .help("Show or hide the inspector")
             }

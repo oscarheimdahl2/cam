@@ -91,6 +91,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.oscarheimdahl.cam.dev
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEV_BUILD"   # lets the code label itself as the dev build
         ASSETCATALOG_COMPILER_APPICON_NAME: Cam
         PRODUCT_NAME: CamDev
         ENABLE_HARDENED_RUNTIME: true
