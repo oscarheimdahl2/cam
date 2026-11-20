@@ -12,15 +12,15 @@ struct MenuContent: View {
         #endif
         Text("Camera: \(model.statusLine)")
         Divider()
+        Button("Open Editor…") {
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: "editor")
+        }
         Picker("Scene", selection: model.activeSceneBinding) {
             ForEach(model.config.scenes) { Text($0.name).tag($0.id) }
         }
         .pickerStyle(.inline)
         Divider()
-        Button("Open Editor…") {
-            NSApp.activate(ignoringOtherApps: true)
-            openWindow(id: "editor")
-        }
         Button("Install / Update Virtual Camera") { model.installer.install() }
         Button("Uninstall Virtual Camera…") { confirmUninstall() }
         Toggle("Launch at Login", isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
