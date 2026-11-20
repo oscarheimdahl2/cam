@@ -16,9 +16,10 @@ Everything runs on your Mac. Cam's own code makes no network connections, and yo
 2. Drag **Cam** into **Applications**, then open it from there, *not* from the disk image or Downloads. (macOS only installs the virtual camera for an app that lives in `/Applications`. If you skip this, Cam tells you to move it.)
 3. Click the Cam icon in the menu bar and choose **Install / Update Virtual Camera**.
 4. macOS will say a system extension was blocked. Open **System Settings → General → Login Items & Extensions → Camera Extensions** and switch **Cam** on.
-5. In your meeting app, choose **Cam** as the camera. Quit and reopen the app first if Cam isn't listed.
+5. Cam offers to restart itself once, so it can connect to the new camera. Accept.
+6. In your meeting app, choose **Cam** as the camera. Quit and reopen the app first if Cam isn't listed.
 
-Cam has to be running for the picture to show. Without it, the camera shows a card saying "Cam isn't running". Turn on **Launch at Login** in the menu to avoid that.
+Cam has to be running for the picture to show. Without it, the camera shows a card saying "Cam isn't running". Turn on **Launch at Login** in the menu to avoid that. If you see that card while Cam is open, quit Cam from its menu and open it again.
 
 **Background blur:** Cam doesn't blur your background itself. Use macOS's own Portrait effect (Control Center → Video Effects) while Cam is running, and it comes through Cam together with your stickers.
 

@@ -3,6 +3,7 @@
 #
 #   scripts/release.sh                 full release (needs the notarization profile, see below)
 #   scripts/release.sh --skip-notarize build, sign and package only (to test the packaging; Gatekeeper will still warn)
+#   BUILD_NUMBER=1795168971 scripts/release.sh   pin the build number (the extension version) instead of using the clock
 #
 # One-time setup, in your own Terminal (so the password never ends up in a chat or a log):
 #   xcrun notarytool store-credentials "cam-notary" --apple-id "<your apple id>" --team-id "<your team id>"
@@ -16,7 +17,7 @@ SKIP_NOTARIZE=0
 
 TEAM_ID=$(sed -n 's/^ *TEAM_ID: *\([A-Z0-9]*\).*/\1/p' project.yml | head -1)
 VERSION=$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9.]*\)"\{0,1\}.*/\1/p' project.yml | head -1)
-BUILD=$(date +%s)   # a new, higher build number every time: macOS only replaces an installed extension with a higher one
+BUILD=${BUILD_NUMBER:-$(date +%s)}   # a new, higher number every time (macOS only replaces an installed extension with a higher one); pin it with BUILD_NUMBER=… to rebuild without forcing an extension update
 IDENTITY=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)
 [[ -n "$IDENTITY" ]] || { echo "No 'Developer ID Application' certificate found in your keychain." >&2; exit 1; }
 

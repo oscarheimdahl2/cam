@@ -51,7 +51,9 @@ final class ExtensionInstaller: NSObject, OSSystemExtensionRequestDelegate, Obse
     func request(_ request: OSSystemExtensionRequest, didFinishWithResult result: OSSystemExtensionRequest.Result) {
         problem = nil
         switch (lastAction, result) {
-        case (.install, .completed): status = "Virtual camera installed"
+        case (.install, .completed):
+            status = "Virtual camera installed"
+            offerRestart()
         case (.uninstall, .completed): status = "Virtual camera uninstalled"
         default: status = "Restart your Mac to finish this"
         }
@@ -67,6 +69,31 @@ final class ExtensionInstaller: NSObject, OSSystemExtensionRequestDelegate, Obse
         } else {
             report("Couldn't \(verb) the virtual camera: \(error.localizedDescription)",
                    detail: "\(error.localizedDescription)\n\n(error \(nsError.domain) \(nsError.code))")
+        }
+    }
+
+    // MARK: Restarting after an install
+
+    /// A Cam that was already running when its camera appeared never sees that camera: macOS only tells a process about
+    /// devices that existed when it started. It could not tell when Photo Booth or Teams starts reading, so the camera
+    /// would show "Cam isn't running". Starting Cam again fixes it, so it's offered right after a successful install.
+    private func offerRestart() {
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            let alert = NSAlert()
+            alert.messageText = "The virtual camera is installed"
+            alert.informativeText = "Cam needs to restart once to connect to it. Your scenes and stickers are kept."
+            alert.addButton(withTitle: "Restart Cam")
+            alert.addButton(withTitle: "Later")
+            if alert.runModal() == .alertFirstButtonReturn { Self.relaunch() }
+        }
+    }
+
+    static func relaunch() {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, _ in
+            DispatchQueue.main.async { NSApp.terminate(nil) }
         }
     }
 
