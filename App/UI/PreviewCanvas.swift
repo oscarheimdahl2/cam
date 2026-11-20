@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// The live preview with the layer handles on top. It can be shown mirrored (like a mirror) or as other people see it;
-/// the picture sent to Teams is never mirrored.
+/// the picture sent to apps is never mirrored.
 struct PreviewCanvas: View {
     @ObservedObject var model: AppModel
     /// Observed separately so only the canvas redraws for each camera frame.

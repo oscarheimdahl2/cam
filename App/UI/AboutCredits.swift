@@ -10,8 +10,8 @@ enum AboutCredits {
 
     private static var text: NSAttributedString {
         let intro = """
-        Puts stickers, text and effects around you on your camera picture, and sends the result to Teams, Zoom \
-        and other apps as a virtual camera.
+        Puts stickers, text and effects around you on your camera picture, and sends the result to any app that uses a camera \
+        as a virtual camera.
 
         Cam's own code makes no network connections. Your scenes and stickers stay on this Mac, in \
         ~/Library/Application Support/Cam.

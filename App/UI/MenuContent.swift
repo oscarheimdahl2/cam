@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The menu-bar menu: quick switches for the things you change mid-meeting.
+/// The menu-bar menu: quick switches for the things you change while the camera is live.
 struct MenuContent: View {
     @ObservedObject var model: AppModel
     @Environment(\.openWindow) private var openWindow
@@ -34,7 +34,7 @@ struct MenuContent: View {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "Uninstall the Cam virtual camera?"
-        alert.informativeText = "Cam will disappear from the camera list in Teams, Zoom and other apps. Your scenes and stickers are kept, and you can install it again at any time."
+        alert.informativeText = "Cam will disappear from the camera list in your apps. Your scenes and stickers are kept, and you can install it again at any time."
         alert.addButton(withTitle: "Uninstall")
         alert.addButton(withTitle: "Cancel")
         alert.buttons.first?.hasDestructiveAction = true

@@ -80,7 +80,7 @@ final class AppModel: ObservableObject {
     var statusLine: String {
         if let problem = installer.problem { return problem }   // a failed install must not be hidden by an old camera
         guard virtualCameraInstalled else { return installer.status }
-        return consumers > 0 ? "Live in a meeting app" : "Ready for Teams"
+        return consumers > 0 ? "In use by an app" : "Ready to use in any app"
     }
 
     private func poll() {
@@ -132,7 +132,7 @@ final class AppModel: ObservableObject {
                            } : nil)
     }
 
-    /// Particle effects only run for visible layers, and only while the editor or a meeting app needs frames.
+    /// Particle effects only run for visible layers, and only while the editor or an app is using the camera.
     private func syncParticles() {
         particles.sync(layers: config.stickersEnabled ? config.activeScene.layers : [])
     }

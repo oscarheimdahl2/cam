@@ -50,7 +50,7 @@ struct EditorView: View {
     }
 }
 
-/// One line under the preview: is the virtual camera installed, and is a meeting app using it.
+/// One line under the preview: is the virtual camera installed, and is an app using it.
 struct StatusFooter: View {
     @ObservedObject var model: AppModel
 
