@@ -8,7 +8,7 @@ struct CameraSettings: View {
         VStack(alignment: .leading, spacing: 12) {
             CameraPicker(model: model)
             Button("Open Video Effects…", systemImage: "person.crop.rectangle") { model.openVideoEffects() }
-            Text("For a blurred background, switch on Portrait for Cam. Keep Portrait off for the app that shows the Cam camera (Teams, Zoom…), or your stickers get blurred too.")
+            Text("For a blurred background, switch on Portrait for Cam. Keep Portrait off for the app that shows the Cam camera, or your stickers get blurred too.")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
