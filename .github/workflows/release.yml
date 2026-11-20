@@ -30,6 +30,11 @@ jobs:
             exit 1
           fi
 
+      # The app icon is an Icon Composer file (App/Cam.icon). Xcode 16, the runner's default, silently skips it and
+      # ships an app with no icon; Xcode 26 and later compile it.
+      - name: Select Xcode 26
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app
+
       - name: Install tools
         run: brew install xcodegen
 

@@ -87,6 +87,7 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$OUT/Expo
   -exportPath "$EXPORT" ${EXPORT_AUTH[@]+"${EXPORT_AUTH[@]}"} -quiet
 APP="$EXPORT/Cam.app"
 codesign --verify --deep --strict "$APP"
+[[ -f "$APP/Contents/Resources/Cam.icns" ]] || { echo "The app has no icon (Cam.icns): is Xcode too old to compile App/Cam.icon? ($(xcodebuild -version | head -1))" >&2; exit 1; }
 "$(dirname "$0")/check-no-user-data.sh" "$APP"   # a fresh install must start empty
 
 if [[ $SKIP_NOTARIZE -eq 0 ]]; then
