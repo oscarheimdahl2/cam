@@ -2,8 +2,8 @@ import XCTest
 
 /// Head layers store their placement relative to the face. These check the math both ways.
 final class FaceGeometryTests: XCTestCase {
-    private func randomFace() -> FaceState {
-        FaceState(x: .random(in: 0.2...0.8), y: .random(in: 0.2...0.8), width: .random(in: 0.08...0.4),
+    private func randomFace() -> TrackedPose {
+        TrackedPose(x: .random(in: 0.2...0.8), y: .random(in: 0.2...0.8), width: .random(in: 0.08...0.4),
                   roll: .random(in: -0.9...0.9), alpha: 1)
     }
 
@@ -38,11 +38,11 @@ final class FaceGeometryTests: XCTestCase {
 
     func testLayerAboveTheHeadMovesRightWhenTheHeadTiltsClockwise() {
         let hat = headLayer()   // default offset is above the head
-        let upright = hat.placement(face: FaceState(x: 0.5, y: 0.5, width: 0.2, roll: 0, alpha: 1))!
+        let upright = hat.placement(face: TrackedPose(x: 0.5, y: 0.5, width: 0.2, roll: 0, alpha: 1))!
         XCTAssertLessThan(upright.y, 0.5)
         XCTAssertEqual(upright.x, 0.5, accuracy: 1e-9)
 
-        let tilted = hat.placement(face: FaceState(x: 0.5, y: 0.5, width: 0.2, roll: .pi / 2, alpha: 1))!
+        let tilted = hat.placement(face: TrackedPose(x: 0.5, y: 0.5, width: 0.2, roll: .pi / 2, alpha: 1))!
         XCTAssertGreaterThan(tilted.x, 0.5)
         XCTAssertEqual(tilted.y, 0.5, accuracy: 1e-9)
         XCTAssertEqual(tilted.rotation, .pi / 2, accuracy: 1e-9)
@@ -198,5 +198,33 @@ final class FaceGeometryTests: XCTestCase {
         var s = scene(["a"])
         XCTAssertNil(s.duplicateLayer(UUID()))
         XCTAssertEqual(files(s), ["a"])
+    }
+
+    func testALayerFollowsTheHandNotTheHead() {
+        let glove = Layer(content: .image(file: "a.png"), anchor: .hand(HandTarget(hand: .right, side: .palm), HeadOffset(dx: 0, dy: 0, scale: 1, roll: 0)))
+        let tracking = Tracking(head: TrackedPose(x: 0.2, y: 0.2, width: 0.2, roll: 0, alpha: 1),
+                                rightHand: TrackedPose(x: 0.7, y: 0.6, width: 0.1, roll: 0, alpha: 1, palmFacing: true))
+        let place = glove.placement(face: tracking.pose(for: glove))!
+        XCTAssertEqual(place.x, 0.7, accuracy: 1e-9)
+        XCTAssertEqual(place.y, 0.6, accuracy: 1e-9)
+        XCTAssertNil(glove.placement(face: Tracking(head: tracking.head, rightHand: nil).pose(for: glove)))
+    }
+
+    func testAHandLayerOnlyShowsForItsHandAndSide() {
+        let pose = TrackedPose(x: 0.5, y: 0.5, width: 0.1, roll: 0, alpha: 1, palmFacing: true)
+        let tracking = Tracking(rightHand: pose)
+        XCTAssertNotNil(tracking.pose(for: .hand(HandTarget(hand: .right, side: .palm))))
+        XCTAssertNil(tracking.pose(for: .hand(HandTarget(hand: .right, side: .back))))
+        XCTAssertNil(tracking.pose(for: .hand(HandTarget(hand: .left, side: .palm))))
+        XCTAssertNotNil(tracking.pose(for: .hand(HandTarget(hand: .right, side: .either))))
+        var unknown = pose; unknown.palmFacing = nil
+        XCTAssertNotNil(Tracking(rightHand: unknown).pose(for: .hand(HandTarget(hand: .right, side: .either))))
+        XCTAssertNil(Tracking(rightHand: unknown).pose(for: .hand(HandTarget(hand: .right, side: .palm))))
+    }
+
+    func testAHandSavedByAnEarlyDevBuildStillLoads() throws {
+        let json = #"{"hand":{"_0":"back","_1":{"dx":0,"dy":0,"scale":1.5,"roll":0}}}"#
+        let anchor = try JSONDecoder().decode(Anchor.self, from: Data(json.utf8))
+        XCTAssertEqual(anchor, .hand(HandTarget(hand: .right, side: .back), HeadOffset(dx: 0, dy: 0, scale: 1.5, roll: 0)))
     }
 }

@@ -149,6 +149,13 @@ private struct LayerRow: View {
 
     private var summary: String {
         if layer.followsHead { return "Follows your head" }
+        if case .hand(let target) = layer.trackTarget {
+            switch target.side {
+            case .either: return "Follows your \(target.hand) hand"
+            case .palm: return "On the palm of your \(target.hand) hand"
+            case .back: return "On the back of your \(target.hand) hand"
+            }
+        }
         return layer.inFront ? "In front of you" : "Behind you"
     }
 
@@ -211,11 +218,21 @@ private struct SelectedLayerSections: View {
                 Toggle("Party mode", isOn: model.layerBinding(layer.id, \.party, fallback: false))
                     .help("A slow rainbow tint")
             }
-            if !layer.isEffect && !layer.followsHead {
+            if !layer.isEffect {
                 SpinSlider(value: model.layerBinding(layer.id, \.spin, fallback: 0))
             }
-            Toggle("Follow head", isOn: model.followHeadBinding(layer.id))
-                .help("Moves, scales and tilts with your face. Position it by eye, then tick the box.")
+            Picker("Follow", selection: model.followBinding(layer.id)) {
+                ForEach(FollowChoice.allCases, id: \.self) { Text($0.title) }
+            }
+            .help("Moves, scales and tilts with your head or hand. Position it by eye, then pick one.")
+            if case .hand = layer.trackTarget {
+                Picker("Side", selection: model.handSideBinding(layer.id)) {
+                    Text("Whole hand").tag(HandSide.either)
+                    Text("Palm").tag(HandSide.palm)
+                    Text("Back of hand").tag(HandSide.back)
+                }
+                .help("Palm and Back of hand are only drawn while that whole side is in view and facing the camera")
+            }
             Toggle("In front of me", isOn: model.layerBinding(layer.id, \.inFront, fallback: false))
                 .help("Draw over you instead of behind you")
         } header: {
@@ -274,5 +291,36 @@ struct LayerThumbnail: View {
             }
         }
         .frame(width: 34, height: 34)
+    }
+}
+
+/// The choices in the "Follow" menu: nothing, or exactly one of the head, the right hand and the left hand.
+enum FollowChoice: CaseIterable {
+    case none, head, rightHand, leftHand
+
+    init(_ target: TrackTarget?) {
+        switch target {
+        case nil: self = .none
+        case .head?: self = .head
+        case .hand(let t)?: self = t.hand == .right ? .rightHand : .leftHand
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .none: return "Nothing"
+        case .head: return "Head"
+        case .rightHand: return "Right hand"
+        case .leftHand: return "Left hand"
+        }
+    }
+
+    func target(side: HandSide) -> TrackTarget? {
+        switch self {
+        case .none: return nil
+        case .head: return .head
+        case .rightHand: return .hand(HandTarget(hand: .right, side: side))
+        case .leftHand: return .hand(HandTarget(hand: .left, side: side))
+        }
     }
 }

@@ -5,7 +5,7 @@ import SwiftUI
 struct LayerHandle: View {
     @ObservedObject var model: AppModel
     let layer: Layer
-    let face: FaceState?
+    let tracking: Tracking
     let canvas: CGSize
     /// Whether the preview is flipped like a mirror. Everything below is in on-screen terms, so it has to know.
     let mirrored: Bool
@@ -20,8 +20,8 @@ struct LayerHandle: View {
     private var selected: Bool { model.selectedLayerID == layer.id }
 
     var body: some View {
-        // A head layer has no placement while no face is tracked, so there's nothing to grab.
-        if let place = layer.placement(face: face) {
+        // A tracked layer has no placement while its head or hand is lost, so there's nothing to grab.
+        if let place = layer.placement(face: tracking.pose(for: layer)) {
             let boxWidth = CGFloat(place.width) * canvas.width
             let boxHeight = boxWidth / CGFloat(layer.aspect)
             // Centre in canvas space (x runs the other way when the preview is mirrored).

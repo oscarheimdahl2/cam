@@ -25,6 +25,11 @@ final class ConfigStore {
         if let data = try? Data(contentsOf: fileURL),
            let decoded = try? JSONDecoder().decode(CamConfig.self, from: data), !decoded.scenes.isEmpty {
             config = decoded
+        } else if FileManager.default.fileExists(atPath: fileURL.path) {
+            // A file that can't be read must not be silently replaced by the fresh config's first save.
+            let backup = folder.appendingPathComponent("config.unreadable.json")
+            try? FileManager.default.removeItem(at: backup)
+            try? FileManager.default.copyItem(at: fileURL, to: backup)
         }
         if !config.scenes.contains(where: { $0.id == config.activeSceneID }) {
             config.activeSceneID = config.scenes[0].id

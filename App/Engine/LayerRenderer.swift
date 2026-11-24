@@ -22,10 +22,11 @@ final class LayerRenderer {
     }
 
     /// `index` is the layer's position in the scene (it offsets the rainbow hue). Returns nil if the layer
-    /// shouldn't be drawn right now (a head layer while no face is tracked, or fully faded out).
-    func image(for layer: Layer, index: Int, time: Double, face: FaceState?) -> CIImage? {
-        guard let place = layer.placement(face: face) else { return nil }
-        let opacity = layer.followsHead ? (face?.alpha ?? 0) : 1
+    /// shouldn't be drawn right now (a tracked layer while its target is lost, or fully faded out).
+    func image(for layer: Layer, index: Int, time: Double, tracking: Tracking) -> CIImage? {
+        let pose = tracking.pose(for: layer)
+        guard let place = layer.placement(face: pose) else { return nil }
+        let opacity = layer.isTracked ? (pose?.alpha ?? 0) : 1
         guard opacity > 0, let source = sourceImage(for: layer) else { return nil }
 
         let size = OutputFrame.size
@@ -43,7 +44,8 @@ final class LayerRenderer {
 
         // What party mode does, if the layer has it.
         var spin = 0.0
-        if layer.spin != 0, !layer.isEffect, !layer.followsHead {
+        let spins = layer.spin != 0 && !layer.isEffect && layer.isTracked   // a spinning tracked layer ignores the tilt
+        if layer.spin != 0, !layer.isEffect {
             let last = spinAngles[layer.id]
             let elapsed = min(max(time - (last?.time ?? time), 0), 0.5)
             spin = (last?.angle ?? 0) + layer.spin * elapsed
@@ -71,7 +73,7 @@ final class LayerRenderer {
         if layer.styled { local = StickerLook.apply(to: local, width: width, height: height) }
 
         let transform = CGAffineTransform(translationX: -width / 2, y: -height / 2)
-            .concatenating(CGAffineTransform(rotationAngle: -(place.rotation + spin)))
+            .concatenating(CGAffineTransform(rotationAngle: -(spins ? spin : place.rotation + spin)))
             .concatenating(CGAffineTransform(translationX: place.x * size.width, y: (1 - place.y) * size.height))
 
         // A transparent margin lets the rotation anti-alias the edges instead of leaving them jagged.

@@ -105,6 +105,8 @@ final class LayerFormatTests: XCTestCase {
             Layer(content: .text(TextContent(string: "Friday!", color: RGBAColor(r: 1, g: 0, b: 0.5, a: 0.9), bold: false)),
                   anchor: .head(HeadOffset(dx: 0, dy: 1.2, scale: 2, roll: 0)),
                   inFront: true, aspect: 3),
+            Layer(content: .image(file: "glove.png"), anchor: .hand(HandTarget(hand: .left, side: .back), HeadOffset(dx: 0.1, dy: 0, scale: 1.5, roll: 0.3)),
+                  inFront: true, spin: 0.5),
             .effect(.confetti),
             Layer(content: .particles(ParticleContent(preset: .snow, tint: RGBAColor(r: 0.2, g: 0.4, b: 1))),
                   anchor: .frame(Placement(x: 0.5, y: 0.5, width: 1, rotation: 0)), inFront: true, aspect: 16.0 / 9.0),

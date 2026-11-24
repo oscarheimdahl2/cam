@@ -186,10 +186,10 @@ final class AppModel: ObservableObject {
         guard cameraEnabled else { return }
         particles.isActive = editorOpen || consumers > 0
         pipeline.setDemand(virtualCamera: consumers > 0,
-                           preview: editorOpen ? { [weak self] image, face in
+                           preview: editorOpen ? { [weak self] image, tracking in
                                Task { @MainActor in
                                    self?.preview.image = image
-                                   self?.preview.face = face
+                                   self?.preview.tracking = tracking
                                }
                            } : nil)
     }
@@ -326,28 +326,38 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Moves/resizes/rotates a layer to an on-screen placement. For head layers this updates the face-relative offset.
+    /// Moves/resizes/rotates a layer to an on-screen placement. For head and hand layers this updates the offset from what they follow.
     func setPlacement(_ id: UUID, _ placement: Placement) {
-        let face = preview.face
-        updateLayer(id) { $0.setPlacement(placement, face: face) }
+        let tracking = preview.tracking
+        updateLayer(id) { $0.setPlacement(placement, face: tracking.pose(for: $0)) }
     }
 
-    /// Ticking "Follow head" keeps the layer where it is relative to your live face (or puts it above the head if
-    /// no face is visible) and puts it in front of you. Unticking leaves it where it is on screen.
-    func setFollowHead(_ id: UUID, _ on: Bool) {
-        let face = preview.face
+    /// Choosing something to follow keeps the layer where it is relative to your live head or hand (or puts it above
+    /// the head / on the hand if it isn't visible) and puts it in front of you. Choosing "Nothing" leaves the layer
+    /// where it is on screen.
+    func setFollow(_ id: UUID, _ target: TrackTarget?) {
+        let tracking = preview.tracking
         updateLayer(id) { layer in
-            if on {
-                guard !layer.followsHead else { return }
-                if let current = layer.placement(face: face), let face {
-                    layer.anchor = .head(HeadOffset(placement: current, relativeTo: face))
-                } else {
-                    layer.anchor = .head(HeadOffset())
-                }
-                layer.inFront = true
-            } else if layer.followsHead {
-                layer.anchor = .frame(layer.placement(face: face) ?? Placement(x: 0.5, y: 0.3, width: 0.2, rotation: 0))
+            guard layer.trackTarget != target else { return }
+            let current = layer.placement(face: tracking.pose(for: layer))
+            guard let target else {
+                layer.anchor = .frame(current ?? Placement(x: 0.5, y: 0.3, width: 0.2, rotation: 0))
+                return
             }
+            // Where it is on screen right now; a layer that is itself lost has nothing to keep.
+            let onScreen = current ?? { if case .frame(let p) = layer.anchor { return p } else { return nil } }()
+            let pose = tracking.source(for: target)
+            let offset: HeadOffset
+            if let onScreen, let pose {
+                offset = HeadOffset(placement: onScreen, relativeTo: pose)
+            } else {
+                offset = target == .head ? HeadOffset() : HeadOffset(dx: 0, dy: 0, scale: 1.5, roll: 0)
+            }
+            switch target {
+            case .head: layer.anchor = .head(offset)
+            case .hand(let handTarget): layer.anchor = .hand(handTarget, offset)
+            }
+            layer.inFront = true
         }
     }
 

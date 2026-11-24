@@ -3,7 +3,7 @@ import Foundation
 /// One item in a scene: *what* it shows (`content`) and *where it is attached* (`anchor`). Scenes are ordered lists
 /// of layers, back (first) to front (last).
 ///
-/// Adding a new kind of thing means adding a `Content` case (clock, video…) or an `Anchor` case (hand, shoulder…).
+/// Adding a new kind of thing means adding a `Content` case (clock, video…) or an `Anchor` case (shoulder…).
 /// They combine freely.
 struct Layer: Identifiable, Equatable {
     var id = UUID()
@@ -21,7 +21,7 @@ struct Layer: Identifiable, Equatable {
     /// Switched off layers stay in the scene but are not drawn.
     var enabled = true
     /// Spin speed in radians per second: positive turns clockwise, negative counter-clockwise, 0 stands still (and the
-    /// layer is back at its own rotation). Not for effects, and head layers follow the head instead.
+    /// layer is back at its own rotation). Not for effects. A head layer that spins still moves and scales with the head but ignores its tilt.
     var spin = 0.0
 }
 
@@ -119,10 +119,13 @@ enum Anchor: Codable, Equatable {
     case frame(Placement)
     /// Relative to the tracked face: it moves, scales and tilts with your head.
     case head(HeadOffset)
+    /// Relative to the tracked hand (its centre, palm length and tilt), same numbers as `head`. Only drawn while the
+    /// chosen side of the hand faces the camera.
+    case hand(HandTarget, HeadOffset)
 }
 
-/// Placement relative to the face: the offset of the layer's centre from the face centre in face widths (along the
-/// face's own axes), the layer's width in face widths, and its tilt relative to the head roll.
+/// Placement relative to a tracked face or hand: the offset of the layer's centre from its centre in tracked widths
+/// (along its own axes), the layer's width in tracked widths, and its tilt relative to the tracked roll.
 struct HeadOffset: Codable, Equatable {
     var dx = 0.0
     var dy = -0.85   // above the head
@@ -162,6 +165,9 @@ extension Layer {
         case .head(var offset):
             offset.dx += 0.2
             copy.anchor = .head(offset)
+        case .hand(let target, var offset):
+            offset.dx += 0.2
+            copy.anchor = .hand(target, offset)
         }
         return copy
     }
@@ -246,8 +252,26 @@ extension Layer {
         return false
     }
 
-    var followsHead: Bool {
-        if case .head = anchor { return true }
-        return false
+    /// What the layer follows, if anything.
+    var trackTarget: TrackTarget? {
+        switch anchor {
+        case .frame: return nil
+        case .head: return .head
+        case .hand(let target, _): return .hand(target)
+        }
     }
+
+    var followsHead: Bool { trackTarget == .head }
+    /// The hand the layer follows, if any.
+    var followedHand: Hand? {
+        if case .hand(let target) = trackTarget { return target.hand } else { return nil }
+    }
+
+    /// Changes which side of its hand the layer sits on (no effect on other layers).
+    mutating func setHandSide(_ side: HandSide) {
+        guard case .hand(var target, let offset) = anchor else { return }
+        target.side = side
+        anchor = .hand(target, offset)
+    }
+    var isTracked: Bool { trackTarget != nil }
 }

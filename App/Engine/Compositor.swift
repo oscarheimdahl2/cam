@@ -20,20 +20,20 @@ final class Compositor {
 
     // MARK: Composing
 
-    /// `time` (seconds) drives the layers' motion. `face` is the tracked face for layers that follow the head.
+    /// `time` (seconds) drives the layers' motion. `tracking` holds the head and hand for layers that follow them.
     func render(frame: CVPixelBuffer, scene: CamScene, stickersEnabled: Bool,
-                time: Double = 0, face: FaceState? = nil) -> CIImage {
-        composite(frame: frame, scene: scene, stickersEnabled: stickersEnabled, time: time, face: face)
+                time: Double = 0, tracking: Tracking = Tracking()) -> CIImage {
+        composite(frame: frame, scene: scene, stickersEnabled: stickersEnabled, time: time, tracking: tracking)
     }
 
     private func composite(frame: CVPixelBuffer, scene: CamScene, stickersEnabled: Bool,
-                           time: Double, face: FaceState?) -> CIImage {
+                           time: Double, tracking: Tracking) -> CIImage {
         let base = OutputFrame.fit(CIImage(cvPixelBuffer: frame))
         let all = stickersEnabled ? Array(scene.layers.enumerated()).filter { $0.element.enabled } : []
         let behind = all.filter { !$0.element.inFront }
         let front = all.filter { $0.element.inFront }
         func draw(_ layer: Layer, _ index: Int) -> CIImage? {
-            layers.image(for: layer, index: index, time: time, face: face)
+            layers.image(for: layer, index: index, time: time, tracking: tracking)
         }
 
         var result = base

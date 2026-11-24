@@ -12,9 +12,22 @@ extension AppModel {
                 set: { value in self.updateLayer(id) { $0[keyPath: keyPath] = value } })
     }
 
-    func followHeadBinding(_ id: UUID) -> Binding<Bool> {
-        Binding(get: { self.scene.layers.first { $0.id == id }?.followsHead ?? false },
-                set: { self.setFollowHead(id, $0) })
+    func followBinding(_ id: UUID) -> Binding<FollowChoice> {
+        Binding(get: { FollowChoice(self.scene.layers.first { $0.id == id }?.trackTarget) },
+                set: { choice in
+                    let side = self.scene.layers.first { $0.id == id }.flatMap { layer -> HandSide? in
+                        if case .hand(let t) = layer.trackTarget { return t.side } else { return nil }
+                    } ?? .either
+                    self.setFollow(id, choice.target(side: side))
+                })
+    }
+
+    func handSideBinding(_ id: UUID) -> Binding<HandSide> {
+        Binding(get: {
+                    if case .hand(let t)? = self.scene.layers.first(where: { $0.id == id })?.trackTarget { return t.side }
+                    return .either
+                },
+                set: { side in self.updateLayer(id) { $0.setHandSide(side) } })
     }
 
     func particlePresetBinding(_ id: UUID) -> Binding<ParticlePreset> {

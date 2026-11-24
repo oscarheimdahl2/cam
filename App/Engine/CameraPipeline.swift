@@ -23,8 +23,10 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     private var sendToVirtualCamera = false
     /// The scene being faded out; `start` is the camera time of the first frame of the fade. Guarded by `lock`.
     private var fade: (from: CamScene, start: Double?)?
-    private var previewHandler: ((CGImage, FaceState?) -> Void)?
-    private let faceTracker = FaceTracker()
+    private var previewHandler: ((CGImage, Tracking) -> Void)?
+    private let headTracker = PoseTracker.head()
+    private let leftHandTracker = PoseTracker.hand(.left)
+    private let rightHandTracker = PoseTracker.hand(.right)
     private var lastPreview = Date.distantPast
     private var configured = false
     private var currentInput: AVCaptureDeviceInput?
@@ -70,7 +72,7 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
 
     func stickersChanged() { queue.async { self.compositor.forgetCachedImages() } }
 
-    func setDemand(virtualCamera: Bool, preview: ((CGImage, FaceState?) -> Void)?) {
+    func setDemand(virtualCamera: Bool, preview: ((CGImage, Tracking) -> Void)?) {
         lock.lock()
         sendToVirtualCamera = virtualCamera
         previewHandler = preview
@@ -224,7 +226,9 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         CamLog.app.notice("camera: \(device.localizedName, privacy: .public) preset \(self.session.sessionPreset.rawValue, privacy: .public)")
         session.commitConfiguration()
         guard currentInput === input else { return currentInput != nil }
-        faceTracker.reset()
+        headTracker.reset()
+        leftHandTracker.reset()
+        rightHandTracker.reset()
         CamLog.app.notice("camera: using \(device.localizedName, privacy: .public)")
         // For finding out where macOS applies its Portrait blur: "applied" means the picture Cam receives is already
         // blurred, before any layer is added.
@@ -255,17 +259,26 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         }
         lock.unlock()
 
-        // Face detection only runs when something needs it: a head sticker in this scene, or the editor is open
-        // (so ticking "Follow head" can use your live face).
-        let needsFace = (settings.stickersEnabled && (settings.scene.layers + (outgoing?.scene.layers ?? [])).contains { $0.followsHead }) || preview != nil
-        var face: FaceState?
-        if needsFace { face = faceTracker.update(frame: frame, time: time) } else { faceTracker.reset() }
+        // Head and hand detection only run when something needs them: a layer that follows one in this scene, or the
+        // editor is open (so choosing "Follow" can use your live head or hand).
+        let layers = settings.stickersEnabled ? settings.scene.layers + (outgoing?.scene.layers ?? []) : []
+        let editing = preview != nil
+        var tracking = Tracking()
+        if editing || layers.contains(where: \.followsHead) {
+            tracking.head = headTracker.update(frame: frame, time: time)
+        } else { headTracker.reset() }
+        if editing || layers.contains(where: { $0.followedHand == .left }) {
+            tracking.leftHand = leftHandTracker.update(frame: frame, time: time)
+        } else { leftHandTracker.reset() }
+        if editing || layers.contains(where: { $0.followedHand == .right }) {
+            tracking.rightHand = rightHandTracker.update(frame: frame, time: time)
+        } else { rightHandTracker.reset() }
 
         var image = compositor.render(frame: frame, scene: settings.scene, stickersEnabled: settings.stickersEnabled,
-                                      time: time, face: face)
+                                      time: time, tracking: tracking)
         if let outgoing {
             let old = compositor.render(frame: frame, scene: outgoing.scene, stickersEnabled: settings.stickersEnabled,
-                                        time: time, face: face)
+                                        time: time, tracking: tracking)
             let dissolve = CIFilter.dissolveTransition()
             dissolve.inputImage = old
             dissolve.targetImage = image
@@ -280,7 +293,7 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         if let preview, Date().timeIntervalSince(lastPreview) > 0.030 {
             lastPreview = Date()
             if let cg = compositor.cgImage(image, maxWidth: 960) {
-                DispatchQueue.main.async { preview(cg, face) }
+                DispatchQueue.main.async { preview(cg, tracking) }
             }
         }
     }
