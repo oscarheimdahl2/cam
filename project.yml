@@ -10,7 +10,7 @@ settings:
     DEVELOPMENT_TEAM: $(TEAM_ID)
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.3"
+    MARKETING_VERSION: "0.4"
     # Signing for a CI release (scripts/release.sh): it passes CAM_SIGN_STYLE=Manual and the two Developer ID profile names.
     CAM_SIGN_STYLE: Automatic
     CAM_SIGN_IDENTITY: Apple Development

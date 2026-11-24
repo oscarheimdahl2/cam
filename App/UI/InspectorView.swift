@@ -96,6 +96,7 @@ private struct LayersPanel: View {
                     LayerRow(model: model, layer: layer, number: index + 1)
                         .tag(layer.id)
                         .contextMenu {
+                            Button(layer.enabled ? "Disable" : "Enable") { model.updateLayer(layer.id) { $0.enabled.toggle() } }
                             Button("Duplicate") { model.duplicateLayer(layer.id) }
                             Divider()
                             Button("Bring Forward") { model.moveLayer(layer.id, by: 1) }
@@ -159,9 +160,18 @@ private struct LayerRow: View {
                 Text(summary).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
+            Button {
+                model.updateLayer(layer.id) { $0.enabled.toggle() }
+            } label: {
+                Image(systemName: layer.enabled ? "eye" : "eye.slash")
+                    .foregroundStyle(layer.enabled ? Color.secondary : Color.primary)
+            }
+            .buttonStyle(.borderless)
+            .help(layer.enabled ? "Hide this layer" : "Show this layer")
             if layer.party { Image(systemName: "sparkles").foregroundStyle(.secondary).help("Party mode") }
         }
         .padding(.vertical, 2)
+        .opacity(layer.enabled ? 1 : 0.45)
     }
 }
 
@@ -199,7 +209,10 @@ private struct SelectedLayerSections: View {
             }
             if layer.isSticker {
                 Toggle("Party mode", isOn: model.layerBinding(layer.id, \.party, fallback: false))
-                    .help("A slow rainbow tint, and a slow spin in a random direction unless it follows your head")
+                    .help("A slow rainbow tint")
+            }
+            if !layer.isEffect && !layer.followsHead {
+                SpinSlider(value: model.layerBinding(layer.id, \.spin, fallback: 0))
             }
             Toggle("Follow head", isOn: model.followHeadBinding(layer.id))
                 .help("Moves, scales and tilts with your face. Position it by eye, then tick the box.")
@@ -208,12 +221,30 @@ private struct SelectedLayerSections: View {
         } header: {
             Text("Selected layer")
         } footer: {
-            if layer.party { Text("Party mode adds a rainbow tint and, unless it follows your head, a slow spin. Turn it off to edit placement.") }
+            if layer.party { Text("Party mode adds a rainbow tint. Turn it off to edit placement.") }
         }
 
         Section {
             Button("Delete Layer", role: .destructive) { model.deleteLayer(layer.id) }
         }
+    }
+}
+
+/// Spin speed: drag right for clockwise, left for counter-clockwise. It snaps to the middle, which stops the spin.
+private struct SpinSlider: View {
+    @Binding var value: Double
+
+    var body: some View {
+        let snapped = Binding(get: { value },
+                              set: { value = abs($0) < Layer.maxSpin * 0.06 ? 0 : $0 })
+        LabeledContent("Spin") {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.counterclockwise").foregroundStyle(.secondary)
+                Slider(value: snapped, in: -Layer.maxSpin...Layer.maxSpin)
+                Image(systemName: "arrow.clockwise").foregroundStyle(.secondary)
+            }
+        }
+        .help("Drag left or right to spin in either direction. The middle stops it.")
     }
 }
 

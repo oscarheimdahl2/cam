@@ -49,7 +49,8 @@ extension CamScene {
         // Party mode used to be a switch for the whole scene. It is a per-layer option now, so a scene that had it
         // on keeps its look: every sticker gets it. (The border lights were dropped.)
         if try c.decodeIfPresent(Bool.self, forKey: .partyMode) == true {
-            for i in layers.indices where layers[i].isSticker { layers[i].party = true }
+            for i in layers.indices where layers[i].isSticker { layers[i].party = true
+                if !layers[i].followsHead { layers[i].spin = layers[i].legacyPartySpin } }
         }
         // Scenes saved before icons were editable showed one picked from their contents; keep that as the starting icon.
         icon = savedIcon ?? (layers.contains { $0.party } ? "sparkles" : SceneIcon.defaultName)

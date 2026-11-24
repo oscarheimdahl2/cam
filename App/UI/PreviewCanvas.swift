@@ -39,7 +39,7 @@ struct PreviewCanvas: View {
 
                 // The handles are NOT clipped, so they stay usable when a layer sits on the edge of the video.
                 ZStack {
-                    ForEach(model.scene.layers) { layer in
+                    ForEach(model.scene.layers.filter(\.enabled)) { layer in
                         LayerHandle(model: model, layer: layer, face: preview.face, canvas: size, mirrored: mirrorPreview)
                     }
                 }

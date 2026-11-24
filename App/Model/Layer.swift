@@ -18,11 +18,24 @@ struct Layer: Identifiable, Equatable {
     /// Party mode, for stickers (image layers) only: a slow rainbow tint and, unless it is on the head, a slow spin
     /// (see `PartyStyle`).
     var party = false
+    /// Switched off layers stay in the scene but are not drawn.
+    var enabled = true
+    /// Spin speed in radians per second: positive turns clockwise, negative counter-clockwise, 0 stands still (and the
+    /// layer is back at its own rotation). Not for effects, and head layers follow the head instead.
+    var spin = 0.0
+}
+
+extension Layer {
+    static let maxSpin = 1.5
+
+    /// The spin a party layer had before spinning became its own setting: slow, and clockwise or counter-clockwise
+    /// depending on the layer's id (so it is stable).
+    var legacyPartySpin: Double { 0.25 * (id.uuid.0 % 2 == 0 ? 1 : -1) }
 }
 
 extension Layer: Codable {
     private enum CodingKeys: String, CodingKey {
-        case id, content, anchor, inFront, styled, aspect, party
+        case id, content, anchor, inFront, styled, aspect, party, enabled, spin
         case motion   // read-only: an older version let a layer spin or tint itself, which is party mode now
     }
 
@@ -35,9 +48,15 @@ extension Layer: Codable {
         inFront = try c.decodeIfPresent(Bool.self, forKey: .inFront) ?? false
         styled = try c.decodeIfPresent(Bool.self, forKey: .styled) ?? false
         aspect = try c.decodeIfPresent(Double.self, forKey: .aspect) ?? 1
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         let hadOwnMotion = !(try c.decodeIfPresent([Motion].self, forKey: .motion) ?? []).isEmpty
         // Party mode only exists for stickers.
         party = (try c.decodeIfPresent(Bool.self, forKey: .party) ?? false || hadOwnMotion) && isSticker
+        if let saved = try c.decodeIfPresent(Double.self, forKey: .spin) {
+            spin = saved
+        } else if party && !followsHead {
+            spin = legacyPartySpin   // party mode used to include a slow spin
+        }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -49,6 +68,8 @@ extension Layer: Codable {
         try c.encode(styled, forKey: .styled)
         try c.encode(aspect, forKey: .aspect)
         try c.encode(party, forKey: .party)
+        try c.encode(enabled, forKey: .enabled)
+        try c.encode(spin, forKey: .spin)
     }
 }
 

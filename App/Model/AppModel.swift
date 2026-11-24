@@ -128,6 +128,7 @@ final class AppModel: ObservableObject {
             camerasObservation = discovery.observe(\.devices, options: [.initial, .new]) { [weak self] discovery, _ in
                 let found = CameraPipeline.realCameras(in: discovery.devices).map { CameraChoice(id: $0.uniqueID, name: $0.localizedName) }
                 Task { @MainActor in self?.cameras = found }
+                self?.pipeline.camerasChanged()
             }
             timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.poll() }
@@ -196,7 +197,7 @@ final class AppModel: ObservableObject {
     /// Particle effects only run for visible layers, and only while the editor or an app is using the camera.
     private func syncParticles() {
         // The scene fading out keeps its particle effects running until the fade is over.
-        particles.sync(layers: config.stickersEnabled ? config.activeScene.layers + (fadingOut?.layers ?? []) : [])
+        particles.sync(layers: config.stickersEnabled ? (config.activeScene.layers + (fadingOut?.layers ?? [])).filter(\.enabled) : [])
     }
 
     private func pushSettingsToPipeline() {

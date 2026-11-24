@@ -66,6 +66,25 @@ final class LegacyDecodingTests: XCTestCase {
         let layer = try JSONDecoder().decode(Layer.self, from: Data(json.utf8))
         XCTAssertFalse(layer.party)
         XCTAssertTrue(layer.inFront)
+        XCTAssertTrue(layer.enabled)
+    }
+
+    func testPartyLayersKeepTheirOldSpinAndStillOnesStayStill() throws {
+        let party = #"{"id":"7B1E2C1A-5D0B-4C58-9A57-3E9B1E0C6A24","content":{"image":{"file":"a.png"}},"anchor":{"frame":{"_0":{"x":0.5,"y":0.5,"width":0.2,"rotation":0}}},"party":true}"#
+        let spinning = try JSONDecoder().decode(Layer.self, from: Data(party.utf8))
+        XCTAssertEqual(abs(spinning.spin), 0.25)
+        let plain = try JSONDecoder().decode(Layer.self, from: Data(party.replacingOccurrences(of: ",\"party\":true", with: "").utf8))
+        XCTAssertEqual(plain.spin, 0)
+        var layer = plain
+        layer.spin = -0.7
+        XCTAssertEqual(try JSONDecoder().decode(Layer.self, from: JSONEncoder().encode(layer)).spin, -0.7)
+    }
+
+    func testADisabledLayerStaysDisabledAfterSavingAndLoading() throws {
+        var layer = Layer(content: .image(file: "a.png"), anchor: .frame(Placement(x: 0.5, y: 0.5, width: 0.2, rotation: 0)))
+        layer.enabled = false
+        let back = try JSONDecoder().decode(Layer.self, from: JSONEncoder().encode(layer))
+        XCTAssertFalse(back.enabled)
     }
 
     func testConfigWithObsoleteKeysDecodes() throws {

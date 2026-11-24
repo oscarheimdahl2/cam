@@ -32,6 +32,9 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     private var preferredCameraID: String?
     /// Watches macOS's Portrait effect on the camera Cam reads, so it's logged when it turns on or off.
     private var portraitObservation: NSKeyValueObservation?
+    /// Whether the session should be running (demand exists). Only touched on `queue`.
+    private var shouldRun = false
+    private var observers: [NSObjectProtocol] = []
 
     private(set) var isRunning = false
 
@@ -39,7 +42,10 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         compositor = Compositor(stickersDir: stickersDir, particleFrames: particleFrames)
         self.link = link
         super.init()
+        watchForCameraProblems()
     }
+
+    deinit { observers.forEach(NotificationCenter.default.removeObserver) }
 
     // MARK: Control (call from main)
 
@@ -75,8 +81,13 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     private func start() {
         guard !isRunning else { return }
         AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-            guard let self, granted else { return }
+            guard let self else { return }
+            guard granted else {
+                CamLog.app.error("camera: access to the camera was denied (System Settings > Privacy & Security > Camera)")
+                return
+            }
             self.queue.async {
+                self.shouldRun = true
                 guard self.configureIfNeeded() else { return }
                 if !self.session.isRunning { self.session.startRunning() }
                 DispatchQueue.main.async { self.isRunning = true }
@@ -88,6 +99,7 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         guard isRunning else { return }
         isRunning = false
         queue.async {
+            self.shouldRun = false
             if self.session.isRunning { self.session.stopRunning() }
             self.link.closeSink()
         }
@@ -112,6 +124,50 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         }
     }
 
+    /// The list of cameras changed (one was plugged in or woke up): switch to the chosen camera if it is there now.
+    func camerasChanged() {
+        queue.async { if self.configured { _ = self.attachInput() } }
+    }
+
+    /// Reattaches and restarts the camera when it goes away, errors out or is interrupted, so it doesn't stay dead
+    /// until the app happens to stop and start it again.
+    private func watchForCameraProblems() {
+        let center = NotificationCenter.default
+        func watch(_ name: Notification.Name, _ handler: @escaping (CameraPipeline, Notification) -> Void) {
+            observers.append(center.addObserver(forName: name, object: nil, queue: nil) { [weak self] note in
+                guard let self else { return }
+                self.queue.async { handler(self, note) }
+            })
+        }
+        watch(AVCaptureDevice.wasConnectedNotification) { me, _ in
+            if me.configured { _ = me.attachInput() }
+        }
+        watch(AVCaptureDevice.wasDisconnectedNotification) { me, note in
+            guard me.configured else { return }
+            CamLog.app.notice("camera: a camera was disconnected: \((note.object as? AVCaptureDevice)?.localizedName ?? "?", privacy: .public)")
+            _ = me.attachInput()
+            me.restartIfNeeded()
+        }
+        watch(AVCaptureSession.runtimeErrorNotification) { me, note in
+            guard (note.object as? AVCaptureSession) === me.session else { return }
+            CamLog.app.error("camera: the capture session failed: \(String(describing: note.userInfo?[AVCaptureSessionErrorKey]), privacy: .public)")
+            _ = me.attachInput(force: true)
+            me.restartIfNeeded()
+        }
+        watch(AVCaptureSession.wasInterruptedNotification) { me, note in
+            guard (note.object as? AVCaptureSession) === me.session else { return }
+            CamLog.app.notice("camera: the session was interrupted")
+        }
+        watch(AVCaptureSession.interruptionEndedNotification) { me, note in
+            guard (note.object as? AVCaptureSession) === me.session else { return }
+            me.restartIfNeeded()
+        }
+    }
+
+    private func restartIfNeeded() {
+        if shouldRun, currentInput != nil, !session.isRunning { session.startRunning() }
+    }
+
     private func configureIfNeeded() -> Bool {
         if configured { return true }
         guard attachInput() else { return false }
@@ -125,23 +181,57 @@ final class CameraPipeline: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         return true
     }
 
-    /// Puts the chosen camera (or the first real one) on the session, replacing the previous one. Runs on `queue`.
-    private func attachInput() -> Bool {
+    /// Puts the chosen camera on the session, replacing the previous one. Runs on `queue`.
+    /// The chosen camera wins as soon as it is available. Until then (or with "Automatic") the camera already in use
+    /// stays, and only if that one is gone does the first real one take over. `force` rebuilds the input even if it is
+    /// the same camera, to recover from an error.
+    private func attachInput(force: Bool = false) -> Bool {
         let cameras = Self.realCameras(in: Self.makeDiscovery().devices)
-        let device = cameras.first { $0.uniqueID == preferredCameraID } ?? cameras.first
-        guard let device, device.uniqueID != currentInput?.device.uniqueID,
-              let input = try? AVCaptureDeviceInput(device: device) else { return currentInput != nil }
+        let current = currentInput.flatMap { input in cameras.first { $0.uniqueID == input.device.uniqueID } }
+        let device = cameras.first { $0.uniqueID == preferredCameraID } ?? current ?? cameras.first
+        guard let device else {
+            if let old = currentInput {   // the camera is gone and no other is available
+                session.beginConfiguration()
+                session.removeInput(old)
+                session.commitConfiguration()
+                currentInput = nil
+                CamLog.app.notice("camera: no camera available")
+            }
+            return false
+        }
+        guard force || device.uniqueID != currentInput?.device.uniqueID else { return currentInput != nil }
+        let input: AVCaptureDeviceInput
+        do { input = try AVCaptureDeviceInput(device: device) } catch {
+            CamLog.app.error("camera: could not open \(device.localizedName, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return currentInput != nil
+        }
         session.beginConfiguration()
-        if let old = currentInput { session.removeInput(old); currentInput = nil }
-        if session.canAddInput(input) { session.addInput(input); currentInput = input }
-        if session.canSetSessionPreset(.hd1920x1080) { session.sessionPreset = .hd1920x1080 }
+        let old = currentInput
+        if let old { session.removeInput(old); currentInput = nil }
+        // The previous camera's size may be more than this one can do, and then the session refuses the input and
+        // nothing is delivered: start from the default size and pick the best one after the input is in.
+        session.sessionPreset = .high
+        if session.canAddInput(input) {
+            session.addInput(input); currentInput = input
+        } else {
+            CamLog.app.error("camera: the session refused \(device.localizedName, privacy: .public)")
+            if let old, session.canAddInput(old) { session.addInput(old); currentInput = old }
+        }
+        // The best size this camera can do, up to 1080p. A preset it can't do must not stay from the previous camera
+        // (a 720p camera after a 1080p one would deliver no frames at all).
+        let preset = [AVCaptureSession.Preset.hd1920x1080, .hd1280x720, .high].first { self.session.canSetSessionPreset($0) }
+        session.sessionPreset = preset ?? .high
+        CamLog.app.notice("camera: \(device.localizedName, privacy: .public) preset \(self.session.sessionPreset.rawValue, privacy: .public)")
         session.commitConfiguration()
+        guard currentInput === input else { return currentInput != nil }
         faceTracker.reset()
+        CamLog.app.notice("camera: using \(device.localizedName, privacy: .public)")
         // For finding out where macOS applies its Portrait blur: "applied" means the picture Cam receives is already
         // blurred, before any layer is added.
         portraitObservation = device.observe(\.isPortraitEffectActive, options: [.initial, .new]) { device, _ in
             CamLog.app.notice("Portrait effect on \(device.localizedName, privacy: .public): applied to Cam's picture: \(device.isPortraitEffectActive, privacy: .public)")
         }
+        restartIfNeeded()
         return currentInput != nil
     }
 

@@ -29,7 +29,7 @@ final class Compositor {
     private func composite(frame: CVPixelBuffer, scene: CamScene, stickersEnabled: Bool,
                            time: Double, face: FaceState?) -> CIImage {
         let base = OutputFrame.fit(CIImage(cvPixelBuffer: frame))
-        let all = stickersEnabled ? Array(scene.layers.enumerated()) : []
+        let all = stickersEnabled ? Array(scene.layers.enumerated()).filter { $0.element.enabled } : []
         let behind = all.filter { !$0.element.inFront }
         let front = all.filter { $0.element.inFront }
         func draw(_ layer: Layer, _ index: Int) -> CIImage? {

@@ -7,6 +7,9 @@ final class LayerRenderer {
     private var imageCache: [String: CIImage] = [:]
     private var textCache: [TextContent: CIImage] = [:]
     private let particleFrames: ParticleFrames
+    /// How far each spinning layer has turned. Adding up `speed * elapsed` (rather than `speed * time`) keeps the
+    /// angle continuous while the speed is dragged, and forgetting it at speed 0 puts the layer back upright.
+    private var spinAngles: [UUID: (angle: Double, time: Double)] = [:]
 
     init(directory: URL, particleFrames: ParticleFrames) {
         self.directory = directory
@@ -40,11 +43,19 @@ final class LayerRenderer {
 
         // What party mode does, if the layer has it.
         var spin = 0.0
+        if layer.spin != 0, !layer.isEffect, !layer.followsHead {
+            let last = spinAngles[layer.id]
+            let elapsed = min(max(time - (last?.time ?? time), 0), 0.5)
+            spin = (last?.angle ?? 0) + layer.spin * elapsed
+            spinAngles[layer.id] = (spin.truncatingRemainder(dividingBy: 2 * .pi), time)
+        } else {
+            spinAngles[layer.id] = nil
+        }
         var wash: (hue: Double, opacity: Double)?
         for motion in layer.party ? PartyStyle.motions(for: layer) : [] {
             switch motion {
-            case .spin(let speed):
-                spin += speed * time
+            case .spin:
+                break
             case .hueDrift(let speed, let washOpacity):
                 let hue = (time * speed + Double(index) * PartyStyle.huePerLayer).truncatingRemainder(dividingBy: 1)
                 wash = (hue, washOpacity)
